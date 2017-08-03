@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 from ctypes import *
-from constantfinder import ConstantFinder
+from constantfinder import ShelvedConstantFinder
 
-ERRNO_CONSTANTS = ConstantFinder("/usr/include/asm-generic/errno-base.h")
-FCNTL_CONSTANTS = ConstantFinder("/usr/include/asm-generic/fcntl.h")
+ERRNO_CONSTANTS = ShelvedConstantFinder("errno.shelf", "/usr/include/asm-generic/errno-base.h")
+FCNTL_CONSTANTS = ShelvedConstantFinder("fcntl.shelf", "/usr/include/asm-generic/fcntl.h")
 
 class FUSEFILEINFO(Structure):
 	_fields_ = [("flags", c_int),
