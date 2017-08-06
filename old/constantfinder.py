@@ -109,8 +109,6 @@ class ShelvedConstantFinder(object):
                 self.constants = copy.deepcopy(db["constants"])
 
 def main():
-    #x = ConstantFinder("/usr/include/linux/fuse.h", ["asm/ioctl.h"])
-    #x = ConstantFinder("/usr/include/asm-generic/fcntl.h")
     x = ShelvedConstantFinder("fcntl.shelf", "/usr/include/asm-generic/fcntl.h")
 
     for constant in x.constants:

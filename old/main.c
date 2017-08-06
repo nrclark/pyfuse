@@ -15,7 +15,6 @@ static const char *hello_path = "/hello";
 
 static int hello_open(const char *path, struct fuse_file_info *fi)
 {
-
     if (strcmp(path, hello_path) != 0) {
         return -ENOENT;
     }
