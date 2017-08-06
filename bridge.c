@@ -14,7 +14,7 @@
 static void *zalloc(size_t size);
 
 struct callbacks python_callbacks = {NULL};
-const alloc_ptr allocator = zalloc;
+static const alloc_ptr allocator = zalloc;
 
 /*--------------------------------------------------------------------*/
 

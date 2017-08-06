@@ -1,6 +1,7 @@
 #ifndef _BRIDGE_H_
 #define _BRIDGE_H_
 
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -14,10 +15,10 @@ struct file_info {
 };
 
 struct file_attributes {
+    uint64_t size;
     uint32_t mode;
     uint32_t uid;
     uint32_t gid;
-    uint64_t size;
 };
 
 /*--------------------------------------------------------------------*/
@@ -88,6 +89,6 @@ struct callbacks {
 /*--------------------------------------------------------------------*/
 
 extern struct callbacks python_callbacks;
-extern const alloc_ptr allocator;
+int bridge_main(int argc, char *argv[]);
 
 #endif
