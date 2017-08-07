@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import time
+import typing
 import subprocess as sp
 import shlex
 import shutil
@@ -111,6 +112,20 @@ class Callbacks(Structure):
     _fields_ = [("readdir", ReadDirPtrType)]
 
 def load_2d_array(data, target, allocator, terminate = True):
+    """ Accepts a list of strings/bytes on the 'data' input.
+    
+    Uses the 'allocator' ctypes function to create an array of (char *),
+    with each pointing to an also-allocated array of (char). The result
+    is loaded with the values from 'data'.
+    
+    If 'terminate' is true, an extra NUL character will be added to the
+    end of each string before copying it. """
+    
+    assert isinstance(data, list)
+    assert isinstance(data[0], str) or isinstance(data[0], bytes)
+    assert isinstance(allocator, AllocPtrType)
+    assert isinstance(terminate, bool)
+
     count = len(data)
     target[0] = cast(allocator(sizeof(char_ptr) * count), 
                      char_double_ptr)
