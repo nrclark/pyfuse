@@ -11,14 +11,11 @@
 
 #include "bridge.h"
 
-static void *zalloc(size_t size);
-
 struct callbacks python_callbacks = {NULL};
-static const alloc_ptr allocator = zalloc;
 
 /*--------------------------------------------------------------------*/
 
-static void *zalloc(size_t size)
+void *zalloc(size_t size)
 {
     return calloc(1, size);
 }
@@ -90,23 +87,18 @@ static int bridge_readdir(const char *path, void *buf,
         return -EPERM;
     }
 
-    retval = python_callbacks.readdir(path, &entries, allocator);
+    retval = python_callbacks.readdir(path, &entries, zalloc);
 
     if (entries == NULL) {
         return -ENOENT;
     }
 
-    for(char **entry = entries; entry != NULL; entry++) {
-        if (filler(buf, *entry, NULL, 0) != 0) {
+    for(uint32_t x = 0; entries[x] != NULL; x++) {
+        if (filler(buf, entries[x], NULL, 0) != 0) {
             retval = -EIO;
             break;
         }
-    }
-
-    for(char **entry = entries; entry != NULL; entry++) {
-        if(*entry != NULL) {
-            free(entry);
-        }
+        free(entries[x]);
     }
 
     free(entries);
