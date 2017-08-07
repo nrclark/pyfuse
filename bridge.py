@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
+""" Helper module for interfacing with the FUSE bridge supplied
+in bridge.c (included). Knows how to compile and load the bridge
+library, including relevant errnos.
 
-import time
-import typing
+Includes a helper function for the tricky business of using an external
+allocator (supplied by bridge.c) to create a 2-D string array (for use
+in the readdir callback. """
+
 import subprocess as sp
 import shlex
 import shutil
@@ -9,9 +14,16 @@ import tempfile
 import re
 import sys
 import os
-from ctypes import *
 
-def find_errnos(header = "/usr/include/errno.h"):
+from ctypes import c_char, c_void_p, c_size_t, c_char_p
+from ctypes import c_uint32, c_uint64, c_bool, c_int
+from ctypes import POINTER, Structure, CFUNCTYPE
+from ctypes import cast, sizeof, addressof
+
+#pylint: disable=invalid-name
+
+
+def find_errnos(header="/usr/include/errno.h"):
     """ Finds all the errno error-codes defined for the host's system.
 
     This is accomplished by useing the local C compiler ('cc' or the
@@ -34,16 +46,16 @@ def find_errnos(header = "/usr/include/errno.h"):
 
     try:
         result = sp.check_output(command).decode().strip()
-    except (FileNotFoundError, sp.CalledProcessError) as e:
+    except (FileNotFoundError, sp.CalledProcessError) as error:
         command = shlex.quote(' '.join(command))
         err_msg = "%s: Pre-parser couldn't execute command: %s)"
         err_msg = err_msg % (base, command)
         sys.stderr.write(err_msg + "\n")
 
-        if isinstance(e, FileNotFoundError):
+        if isinstance(error, FileNotFoundError):
             sys.exit(127)
         else:
-            sys.exit(e.returncode)
+            sys.exit(error.returncode)
 
     regex = "^[ \t]*[#]define[ \t]+E[^ \t]+[ \t]+[0-9]+"
 
@@ -55,7 +67,8 @@ def find_errnos(header = "/usr/include/errno.h"):
 
     return errnos
 
-def compile_library(files = ["bridge_test.c"], name = "bridge"):
+
+def compile_library(files=("bridge_test.c",), name="bridge"):
     """ Compiles a set of files into a dynamically-linked object
     in a new temp directory. Returns the path to the new library.
 
@@ -90,7 +103,7 @@ def compile_library(files = ["bridge_test.c"], name = "bridge"):
         result = 127
 
     if result != 0:
-        shutil.rmtree(tempdir, ignore_errors = True)
+        shutil.rmtree(tempdir, ignore_errors=True)
         command = shlex.quote(' '.join(command))
         err_msg = "%s: couldn't compile library. (command: %s)"
         err_msg = err_msg % (base, command)
@@ -106,13 +119,23 @@ char_double_ptr = POINTER(char_ptr)
 char_triple_ptr = POINTER(char_double_ptr)
 AllocPtrType = CFUNCTYPE(c_void_p, c_size_t)
 
+
 class FileInfo(Structure):
+    #pylint: disable=too-few-public-methods
+    """ Reduced version of the 'fuse_file_info' structure. Free of
+    bitfields and unneeded parameters. """
+
     _fields_ = [("handle", c_uint64),
                 ("flags", c_uint32),
                 ("direct_io", c_bool),
                 ("nonseekable", c_bool)]
 
+
 class FileAttributes(Structure):
+    #pylint: disable=too-few-public-methods
+    """ Reduced version of the 'stat' structure. Only includes the
+    bits that are relevant to our particular application. """
+
     _fields_ = [("size", c_uint64),
                 ("mode", c_uint32),
                 ("uid", c_uint32),
@@ -121,7 +144,7 @@ class FileAttributes(Structure):
 
 OpenPtrType = CFUNCTYPE(c_int, c_char_p, POINTER(FileInfo))
 
-ReadDirPtrType = CFUNCTYPE(c_int, c_char_p, char_triple_ptr, 
+ReadDirPtrType = CFUNCTYPE(c_int, c_char_p, char_triple_ptr,
                            AllocPtrType)
 
 GetAttrPtrType = CFUNCTYPE(c_int, c_char_p, POINTER(FileAttributes))
@@ -134,43 +157,48 @@ WritePtrType = CFUNCTYPE(c_int, c_char_p, c_char_p, c_uint64, c_uint64,
 
 MainPtrType = CFUNCTYPE(c_int, c_int, POINTER(c_char_p))
 
+
 class Callbacks(Structure):
+    #pylint: disable=too-few-public-methods
+    """ Container for all of the python-supplied callbacks that
+    bridge.c knows how to use. Reduced version of the 'fuse_operations'
+    struct."""
+
     _fields_ = [("open", OpenPtrType)]
     _fields_ = [("readdir", ReadDirPtrType)]
     _fields_ = [("getattr", GetAttrPtrType)]
     _fields_ = [("read", ReadPtrType)]
     _fields_ = [("write", WritePtrType)]
 
-def load_2d_array(data, target, allocator, terminate = True):
+
+def load_2d_array(data, target, allocator, terminate=True):
     """ Accepts a list of strings/bytes on the 'data' input.
-    
+
     Uses the 'allocator' ctypes function to create an array of (char *),
     with each pointing to an also-allocated array of (char). The result
     is loaded with the values from 'data'.
-    
+
     If 'terminate' is true, an extra NUL character will be added to the
     end of each string before copying it. """
-    
+
     assert isinstance(data, list)
-    assert isinstance(data[0], str) or isinstance(data[0], bytes)
+    assert isinstance(data[0], (bytes, str))
     assert isinstance(allocator, AllocPtrType)
     assert isinstance(terminate, bool)
 
-    count = len(data)
-    target[0] = cast(allocator(sizeof(char_ptr) * count), 
+    target[0] = cast(allocator(sizeof(char_ptr) * len(data)),
                      char_double_ptr)
 
-    for x in range(count):
-        if type(data[x]) == str:
-            out_word = data[x].encode()
-        else:
-            out_word = data[x]
+    for k, string in enumerate(data):
+        if isinstance(string, str):
+            string = string.encode()
+
         if terminate:
-            out_word += b'\0'
+            string += b'\0'
 
-        length = len(out_word)
+        length = len(string)
 
-        target[0][x] = cast(allocator(length), char_ptr)
-        addr = addressof(target[0][x].contents)
+        target[0][k] = cast(allocator(length), char_ptr)
+        addr = addressof(target[0][k].contents)
         string_buf = (c_char * length).from_address(addr)
-        string_buf[:length] = out_word
+        string_buf[:length] = string
