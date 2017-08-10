@@ -7,6 +7,7 @@ Includes a helper function for the tricky business of using an external
 allocator (supplied by bridge.c) to create a 2-D string array (for use
 in the readdir callback. """
 
+import ast
 import subprocess as sp
 import shlex
 import shutil
@@ -18,10 +19,61 @@ import os
 from ctypes import c_char, c_void_p, c_size_t, c_char_p
 from ctypes import c_uint32, c_uint64, c_bool, c_int
 from ctypes import POINTER, Structure, CFUNCTYPE
-from ctypes import cast, sizeof, addressof
+from ctypes import cast, sizeof, addressof, cdll
 
 #pylint: disable=invalid-name
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def GetConstants(includes = [], constants = []):
+    if isinstance(includes, str):
+        includes = [includes]
+    template = """
+    #include <stdio.h>
+    #include <stddef.h>
+    #include <stdlib.h>
+    #include <stdint.h>
+    %INCLUDES%
+
+    int main(void) {
+        %CONSTANT_LINES%
+        return 0;
+    }
+    """
+    
+    include_string = ['#include "%s"' % x for x in includes]
+    include_string = '\n'.join(include_string)
+
+    line = 'printf("%NAME% = %lld\\n", (long long int)'
+    line += '(%NAME%));'        
+    lines = [line.replace('%NAME%',x) for x in constants]
+    
+    source = template.replace("%INCLUDES%", include_string)
+    source = source.replace("%CONSTANT_LINES%", '\n'.join(lines))
+
+    fd, filename = tempfile.mkstemp(dir='.', suffix='.c')
+    binary = filename + '.bin'
+    os.write(fd, source.encode())
+    os.close(fd)
+
+    try:
+        sp.check_call(["cc", filename, "-o", binary])
+        result = sp.check_output([binary]).decode().strip()
+
+    except sp.CalledProcessError:
+        result = ""
+
+    for name in [binary, filename]:
+        if os.path.isfile(name):
+            os.remove(name)
+
+    results = [x.split('=') for x in result.splitlines()]
+    retval = {}
+
+    for x in results:
+        retval[x[0].strip()] = ast.literal_eval(x[1].strip())
+
+    return retval
 
 def find_errnos(header="/usr/include/errno.h"):
     """ Finds all the errno error-codes defined for the host's system.
@@ -95,7 +147,7 @@ def compile_library(files=("bridge_test.c",), name="bridge"):
 
     cflags += ["-D_FILE_OFFSET_BITS=64", "-fPIC", "-shared", "-lfuse"]
     cflags += ["-Wall", "-Wextra", "-pedantic", "-Werror"]
-    command = cc + cflags + files + ["-o", outfile]
+    command = cc + cflags + list(files) + ["-o", outfile]
 
     try:
         result = sp.call(command)
@@ -171,7 +223,9 @@ class Callbacks(Structure):
     _fields_ = [("write", WritePtrType)]
 
 
-def load_2d_array(data, target, allocator, terminate=True):
+def load_string_array(data, target, allocator, terminate_strings = True,
+                      terminate_array = True):
+
     """ Accepts a list of strings/bytes on the 'data' input.
 
     Uses the 'allocator' ctypes function to create an array of (char *),
@@ -184,16 +238,17 @@ def load_2d_array(data, target, allocator, terminate=True):
     assert isinstance(data, list)
     assert isinstance(data[0], (bytes, str))
     assert isinstance(allocator, AllocPtrType)
-    assert isinstance(terminate, bool)
+    assert isinstance(terminate_strings, bool)
+    assert isinstance(terminate_array, bool)
 
-    target[0] = cast(allocator(sizeof(char_ptr) * len(data)),
+    target[0] = cast(allocator(sizeof(char_ptr) * (len(data) + 1)),
                      char_double_ptr)
 
     for k, string in enumerate(data):
         if isinstance(string, str):
             string = string.encode()
 
-        if terminate:
+        if terminate_strings:
             string += b'\0'
 
         length = len(string)
@@ -202,3 +257,40 @@ def load_2d_array(data, target, allocator, terminate=True):
         addr = addressof(target[0][k].contents)
         string_buf = (c_char * length).from_address(addr)
         string_buf[:length] = string
+
+        if terminate_array:
+            target[0][len(data)] = POINTER(c_int)()
+
+#----------------------------------------------------------------------#
+
+class FuseBridge(object):
+    def __init__(self, source_file = "bridge.c"):
+        self.library_file = None
+        source_file = os.path.join(SCRIPT_DIR, source_file)
+    
+        self.library_file = compile_library()
+        self.dll = cdll.LoadLibrary(self.library_file)
+        self.callbacks = Callbacks.in_dll(self.dll, 'callbacks');
+
+        self.types = (FileInfo, FileAttributes, OpenPtrType,
+                      ReadDirPtrType, GetAttrPtrType, ReadPtrType,
+                      WritePtrType, MainPtrType, AllocPtrType)
+        self.errnos = find_errnos()
+
+        o_flags = ["O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND", 
+                   "O_TRUNC", "O_CREAT", "O_EXCL"]
+
+        self.oflags = y = GetConstants(["fcntl.h"], o_flags)
+
+    def __del__(self):
+        if self.library_file is not None:
+            shutil.rmtree(os.path.dirname(self.library_file))
+
+        if '__del__' in dir(super(FuseBridge,self)):
+            super(FuseBridge,self).__del__()
+
+if __name__ == "__main__":
+    x = FuseBridge()
+    print(x.oflags)
+    print(x.errnos)
+
