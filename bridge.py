@@ -33,6 +33,7 @@ def GetConstants(includes = [], constants = []):
     #include <stddef.h>
     #include <stdlib.h>
     #include <stdint.h>
+    #include <sys/types.h>
     %INCLUDES%
 
     int main(void) {
@@ -74,6 +75,47 @@ def GetConstants(includes = [], constants = []):
         retval[x[0].strip()] = ast.literal_eval(x[1].strip())
 
     return retval
+
+
+def FindConstants(header):
+    """ Finds all the names of all #define constants in the target
+    header. Does not retrieve their value. """
+
+    if "CC" in os.environ:
+        cc = shlex.split(os.environ["CC"])
+    else:
+        cc = ["cc"]
+
+    if "CFLAGS" in os.environ:
+        cflags = shlex.split(os.environ["CFLAGS"])
+    else:
+        cflags = []
+
+    base = os.path.split(sys.argv[0])[1]
+    command = cc + cflags + ["-E", "-dM", header]
+
+    try:
+        result = sp.check_output(command).decode().strip()
+    except (FileNotFoundError, sp.CalledProcessError) as error:
+        command = shlex.quote(' '.join(command))
+        err_msg = "%s: Pre-parser couldn't execute command: %s)"
+        err_msg = err_msg % (base, command)
+        sys.stderr.write(err_msg + "\n")
+
+        if isinstance(error, FileNotFoundError):
+            sys.exit(127)
+        else:
+            sys.exit(error.returncode)
+
+    regex = "^[ \t]*[#]define[ \t]+[^ (\t]+[ \t]+"
+
+    matches = re.findall(regex, result, flags=re.M)
+    result = [x.strip().split() for x in matches]
+    result = [x[1].strip() for x in result]
+    result = [x for x in result if x[:1] != "_"] 
+
+    return result
+
 
 def find_errnos(header="/usr/include/errno.h"):
     """ Finds all the errno error-codes defined for the host's system.
@@ -201,7 +243,7 @@ ReadDirPtrType = CFUNCTYPE(c_int, c_char_p, char_triple_ptr,
 
 GetAttrPtrType = CFUNCTYPE(c_int, c_char_p, POINTER(FileAttributes))
 
-ReadPtrType = CFUNCTYPE(c_int, c_char_p, c_char_p, c_uint64, c_uint64,
+ReadPtrType = CFUNCTYPE(c_int, c_char_p, char_ptr, c_uint64, c_uint64,
                         POINTER(FileInfo))
 
 WritePtrType = CFUNCTYPE(c_int, c_char_p, c_char_p, c_uint64, c_uint64,
@@ -261,6 +303,26 @@ def load_string_array(data, target, allocator, terminate_strings = True,
         if terminate_array:
             target[0][len(data)] = POINTER(c_int)()
 
+
+#----------------------------------------------------------------------#
+
+class Container(object):
+    def __init__(self, item_dict = {}):
+        for key in item_dict.keys():
+            self.__dict__[key] = item_dict[key]
+
+class ConstantContainer(Container):
+    def __init__(self, include_file, regex=".*"):
+        regex = re.compile(regex)
+        constants = FindConstants(include_file)
+        constants = [x for x in constants if re.search(regex, x)]
+        constant_dict = GetConstants(include_file, constants)
+        super(ConstantContainer, self).__init__(constant_dict)
+
+Errno = ConstantContainer("/usr/include/errno.h")
+Fcntl = ConstantContainer("/usr/include/fcntl.h", "^[A-Z]")
+Stat = ConstantContainer("/usr/include/sys/stat.h", "^[A-Z]")
+
 #----------------------------------------------------------------------#
 
 class FuseBridge(object):
@@ -275,12 +337,6 @@ class FuseBridge(object):
         self.types = (FileInfo, FileAttributes, OpenPtrType,
                       ReadDirPtrType, GetAttrPtrType, ReadPtrType,
                       WritePtrType, MainPtrType, AllocPtrType)
-        self.errnos = find_errnos()
-
-        o_flags = ["O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND", 
-                   "O_TRUNC", "O_CREAT", "O_EXCL"]
-
-        self.oflags = y = GetConstants(["fcntl.h"], o_flags)
 
     def __del__(self):
         if self.library_file is not None:
@@ -291,6 +347,8 @@ class FuseBridge(object):
 
 if __name__ == "__main__":
     x = FuseBridge()
-    print(x.oflags)
-    print(x.errnos)
+
+    print(dir(Errno))
+    print(dir(Fcntl))
+    print(dir(Stat))
 
