@@ -21,9 +21,7 @@ from ctypes import c_uint32, c_uint64, c_bool, c_int
 from ctypes import POINTER, Structure, CFUNCTYPE
 from ctypes import cast, sizeof, cdll, memmove, create_string_buffer
 
-
 #pylint: disable=invalid-name
-
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -187,7 +185,7 @@ def find_errnos(header="/usr/include/errno.h"):
     return errnos
 
 
-def compile_library(files=("bridge_test.c",), name="bridge"):
+def compile_library(files=("bridge.c",), name="bridge"):
     """ Compiles a set of files into a dynamically-linked object
     in a new temp directory. Returns the path to the new library.
 
@@ -213,7 +211,8 @@ def compile_library(files=("bridge_test.c",), name="bridge"):
         cflags = ["-O2"]
 
     cflags += ["-D_FILE_OFFSET_BITS=64", "-fPIC", "-shared", "-lfuse"]
-    cflags += ["-Wall", "-Wextra", "-pedantic", "-Werror"]
+    cflags += ["-Wall", "-Wextra", "-pedantic"]
+    #cflags += ["-Werror"]
     command = cc + cflags + list(files) + ["-o", outfile]
 
     try:
@@ -442,11 +441,17 @@ class FuseBridge(object):
 
         self.library_file = compile_library()
         self.dll = cdll.LoadLibrary(self.library_file)
-        self.callbacks = Callbacks.in_dll(self.dll, 'callbacks')
+        self.callbacks = Callbacks.in_dll(self.dll, 'python_callbacks')
 
-        self.types = (FileInfo, FileAttributes, OpenPtrType,
-                      ReadDirPtrType, GetAttrPtrType, ReadPtrType,
-                      WritePtrType, MainPtrType, AllocPtrType)
+        self.types = Container({"FileInfo": FileInfo,
+                                "FileAttributes": FileAttributes,
+                                "OpenPtrType": OpenPtrType,
+                                "ReadDirPtrType": ReadDirPtrType,
+                                "GetAttrPtrType": GetAttrPtrType,
+                                "ReadPtrType": ReadPtrType,
+                                "WritePtrType": WritePtrType,
+                                "MainPtrType": MainPtrType,
+                                "AllocPtrType": AllocPtrType})
 
     def __del__(self):
         if self.library_file is not None:

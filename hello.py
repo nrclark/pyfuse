@@ -2,13 +2,12 @@
 
 import sys
 import bridge
+import ctypes
 from bridge import FuseBridge, Errno, Fcntl, Stat
 from bridge import create_char_array, load_char_ptr
 
-
 hello_str = "Hello World!\n"
 hello_path = "/hello"
-
 
 def hello_open(path, info):
     assert isinstance(info, bridge.FileInfo)
@@ -42,14 +41,14 @@ def hello_getattr(path, attributes):
     attributes.size = 42
 
     if path == "/":
-        attributes.mode = Stat.S_IFDIR | 0755
+        attributes.mode = Stat.S_IFDIR | 755
     elif path == hello_path:
-        attributes.mode = Stat.S_IFREG | 0444
+        attributes.mode = Stat.S_IFREG | 444
     elif path == "/moto":
-        attributes.mode = Stat.S_IFDIR | 0755
+        attributes.mode = Stat.S_IFDIR | 755
     elif path == "/moto/hello":
-        attributes.mode = Stat.S_IFREG | 0444
-    else
+        attributes.mode = Stat.S_IFREG | 444
+    else:
         return -Errno.ENOENT
 
     return 0
@@ -74,6 +73,16 @@ def hello_read(path, target, size, offset, info):
     return size
 
 
+def hello_write(path, data, size, offset, info):
+    return size
+
+
+def make_argv(args):
+    result = (ctypes.c_char_p * len(args))()
+    result[:] = args
+    return result
+
+
 def hello_main(argv):
     assert isinstance(argv, (list, tuple))
 
@@ -87,11 +96,13 @@ def hello_main(argv):
     argc = len(argv)
     argv_pointer = create_char_array(argv)
 
-    return fuse.bridge_main(argc, argv_pointer)
+    argv = make_argv([b"hello", b"my", b"dogs"])
+    argv = create_char_array([b"hello", b"my", b"dogs"], fuse.dll.zalloc)
+    return fuse.dll.bridge_main(3, argv)
 
 
 def main():
-    hello_main(sys.argv)
+    sys.exit(hello_main(sys.argv))
 
 if __name__ == "__main__":
     main()

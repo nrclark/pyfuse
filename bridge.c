@@ -13,7 +13,7 @@
 
 struct callbacks python_callbacks = {NULL};
 
-/*--------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
 
 void *zalloc(size_t size)
 {
@@ -56,7 +56,7 @@ static void unload_attributes(const struct file_attributes *in,
     out->st_size = in->size;
 }
 
-/*--------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
 
 static int bridge_open(const char *path, struct fuse_file_info *fi)
 {
@@ -77,8 +77,8 @@ static int bridge_open(const char *path, struct fuse_file_info *fi)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 static int bridge_readdir(const char *path, void *buf,
-                         fuse_fill_dir_t filler, off_t offset,
-                         struct fuse_file_info *fi)
+                          fuse_fill_dir_t filler, off_t offset,
+                          struct fuse_file_info *fi)
 {
     int retval;
     char **entries = NULL;
@@ -126,7 +126,7 @@ static int bridge_getattr(const char *path, struct stat *stbuf)
 }
 
 static int bridge_read(const char *path, char *buf, size_t size,
-                      off_t offset, struct fuse_file_info *fi)
+                       off_t offset, struct fuse_file_info *fi)
 {
     int retval;
     struct file_info info = {0};
@@ -143,7 +143,7 @@ static int bridge_read(const char *path, char *buf, size_t size,
 }
 
 static int bridge_write(const char *path, const char *buf, size_t size,
-                      off_t offset, struct fuse_file_info *fi)
+                        off_t offset, struct fuse_file_info *fi)
 {
     int retval;
     struct file_info info = {0};
@@ -169,5 +169,10 @@ static struct fuse_operations bridge_oper = {
 
 int bridge_main(int argc, char *argv[])
 {
-    return fuse_main(argc, argv, &bridge_oper, NULL);
+    printf("test\n");
+    for(uint8_t x = 0; x < argc; x++) {
+        printf("%s\n", argv[x]);
+    }
+    return -27;
+    //return fuse_main(argc, argv, &bridge_oper, NULL);
 }
