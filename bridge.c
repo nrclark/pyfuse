@@ -20,6 +20,8 @@ void *zalloc(size_t size)
     return calloc(1, size);
 }
 
+/*----------------------------------------------------------------------------*/
+
 static void load_file_info(const struct fuse_file_info *in,
                            struct file_info *out)
 {
@@ -169,10 +171,5 @@ static struct fuse_operations bridge_oper = {
 
 int bridge_main(int argc, char *argv[])
 {
-    printf("test\n");
-    for(uint8_t x = 0; x < argc; x++) {
-        printf("%s\n", argv[x]);
-    }
-    return -27;
-    //return fuse_main(argc, argv, &bridge_oper, NULL);
+    return fuse_main(argc, argv, &bridge_oper, NULL);
 }

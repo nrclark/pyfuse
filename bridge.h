@@ -21,7 +21,7 @@ struct file_attributes {
     uint32_t gid;
 };
 
-/*--------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------*/
 
 /* Returns values of the form 0 (success), -ENOENT, -EACCES, etc.
  * 
@@ -30,8 +30,7 @@ struct file_attributes {
  * callback has completed, the members of *info will be loaded
  * back into the fuse struct. */
 
-typedef int (*python_open_ptr)(const char *path,
-                               struct file_info *info);
+typedef int (*python_open_ptr)(const char *path, struct file_info *info);
 
 /* Returns values of the form 0 (success), -ENOENT, -EACCES, etc.
  * 
@@ -61,9 +60,8 @@ typedef int (*python_getattr_ptr)(const char *path,
  * callback has completed, the members of *info will be loaded
  * back into the fuse struct. */
 
-typedef int (*python_read_ptr)(const char *path, char *outbuf,
-                               uint64_t size, uint64_t offset,
-                               struct file_info *info);
+typedef int (*python_read_ptr)(const char *path, char *outbuf, uint64_t size,
+                               uint64_t offset, struct file_info *info);
 
 /* Returns values of the form 0 (success), -ENOENT, -EACCES, etc.
  * 
