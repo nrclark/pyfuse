@@ -32,6 +32,9 @@ def compile_library(files=(), libname="temp"):
     Returns:
         string: The path to generated library file. """
 
+    if isinstance(files, str):
+        files = (files,)
+
     base = os.path.split(sys.argv[0])[1]
     tempdir = tempfile.mkdtemp(prefix="tmp.%s." % base)
     outfile = "lib%s.so" % libname

@@ -89,4 +89,8 @@ struct callbacks {
 extern struct callbacks python_callbacks;
 int bridge_main(int argc, char *argv[]);
 
+/*--------------------------------------------------------------------*/
+
+int debug_write(char *string);
+
 #endif

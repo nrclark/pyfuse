@@ -7,129 +7,58 @@ import tempfile
 import re
 import sys
 import os
-from ctypes import *
 
-def find_errnos(header = "/usr/include/errno.h"):
-    """ Finds all the errno error-codes defined for the host's system.
-
-    This is accomplished by useing the local C compiler ('cc' or the
-    CC environment variable) to preprocess the errno.h header.
-
-    The result is returned as a dict of values. """
-
-    if "CC" in os.environ:
-        cc = shlex.split(os.environ["CC"])
-    else:
-        cc = ["cc"]
-
-    if "CFLAGS" in os.environ:
-        cflags = shlex.split(os.environ["CFLAGS"])
-    else:
-        cflags = []
-
-    base = os.path.split(sys.argv[0])[1]
-    command = cc + cflags + ["-E", "-dM", header]
-
-    try:
-        result = sp.check_output(command).decode().strip()
-    except (FileNotFoundError, sp.CalledProcessError) as e:
-        command = shlex.quote(' '.join(command))
-        err_msg = "%s: Pre-parser couldn't execute command: %s)"
-        err_msg = err_msg % (base, command)
-        sys.stderr.write(err_msg + "\n")
-
-        if isinstance(e, FileNotFoundError):
-            sys.exit(127)
-        else:
-            sys.exit(e.returncode)
-
-    regex = "^[ \t]*[#]define[ \t]+E[^ \t]+[ \t]+[0-9]+"
-
-    matches = re.findall(regex, result, flags=re.M)
-    errnos = {}
-    for match in matches:
-        match = [x.strip() for x in match.split()]
-        errnos[match[1]] = int(match[2])
-
-    return errnos
-
-def compile_library(files = ["bridge.h", "bridge.c"], name = "bridge"):
-    """ Compiles a set of files into a dynamically-linked object
-    in a new temp directory. Returns the path to the new library.
-
-    This is accomplished by using the local C compiler ('cc' or the
-    CC environment variable) and CFLAGS (if defined in the environment)
-    to compile the provided file set.
-
-    The result is returned as a string. """
-
-    base = os.path.split(sys.argv[0])[1]
-    tempdir = tempfile.mkdtemp(prefix="tmp.%s." % base)
-    outfile = "lib%s.so" % name
-    outfile = os.path.join(tempdir, outfile)
-
-    if "CC" in os.environ:
-        cc = shlex.split(os.environ["CC"])
-    else:
-        cc = ["cc"]
-
-    if "CFLAGS" in os.environ:
-        cflags = shlex.split(os.environ["CFLAGS"])
-    else:
-        cflags = ["-O2"]
-
-    cflags += ["-D_FILE_OFFSET_BITS=64", "-fPIC", "-shared", "-lfuse"]
-    cflags += ["-Wall", "-Wextra", "-pedantic", "-Werror"]
-    command = cc + cflags + files + ["-o", outfile]
-
-    try:
-        result = sp.call(command)
-    except FileNotFoundError:
-        result = 127
-
-    if result != 0:
-        shutil.rmtree(tempdir, ignore_errors = True)
-        command = shlex.quote(' '.join(command))
-        err_msg = "%s: couldn't compile library. (command: %s)"
-        err_msg = err_msg % (base, command)
-        sys.stderr.write(err_msg + "\n")
-        sys.exit(result)
-
-    return outfile
+import ctypes as ct
+import compiler_tools as tools
 
 #----------------------------------------------------------------------#
 
-class FileInfo(Structure):
-    _fields_ = [("handle", c_uint64),
-                ("flags", c_uint32),
-                ("direct_io", c_bool),
-                ("nonseekable", c_bool)]
+class FileInfo(ct.Structure):
+    _fields_ = [("handle", ct.c_uint64),
+                ("flags", ct.c_uint32),
+                ("direct_io", ct.c_bool),
+                ("nonseekable", ct.c_bool)]
 
-class FileAttributes(Structure):
-    _fields_ = [("size", c_uint64),
-                ("mode", c_uint32),
-                ("uid", c_uint32),
-                ("gid", c_uint32)]
+class FileAttributes(ct.Structure):
+    _fields_ = [("size", ct.c_uint64),
+                ("mode", ct.c_uint32),
+                ("uid", ct.c_uint32),
+                ("gid", ct.c_uint32)]
 
-OpenPtrType = CFUNCTYPE(c_int, c_char_p, POINTER(FileInfo))
-AllocPtrType = CFUNCTYPE(c_void_p, c_size_t)
-ReadDirPtrType = CFUNCTYPE(c_int, c_char_p, POINTER(POINTER(c_char_p)),
-                           AllocPtrType)
+OpenPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.POINTER(FileInfo))
+AllocPtrType = ct.CFUNCTYPE(ct.c_void_p, ct.c_size_t)
+ReadDirPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p,
+                              ct.POINTER(ct.POINTER(ct.c_char_p)),
+                              AllocPtrType)
 
-GetattrPtrType = CFUNCTYPE(c_int, c_char_p, POINTER(FileAttributes))
+GetAttrPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.POINTER(FileAttributes))
 
-ReadPtrType = CFUNCTYPE(c_int, c_char_p, c_char_p, c_uint64, c_uint64,
-                        POINTER(FileInfo))
+ReadPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_char_p, ct.c_uint64,
+                           ct.c_uint64, ct.POINTER(FileInfo))
 
-WritePtrType = CFUNCTYPE(c_int, c_char_p, c_char_p, c_uint64, c_uint64,
-                         POINTER(FileInfo))
+WritePtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_char_p, ct.c_uint64,
+                            ct.c_uint64, ct.POINTER(FileInfo))
 
-MainPtrType = CFUNCTYPE(c_int, c_int, POINTER(c_char_p))
+MainPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_int, ct.POINTER(ct.c_char_p))
+DebugType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p)
+
+class Callbacks(ct.Structure):
+    _fields_ = [("open", OpenPtrType)]
+    _fields_ = [("readdir", ReadDirPtrType)]
+    _fields_ = [("getattr", GetAttrPtrType)]
+    _fields_ = [("read", ReadPtrType)]
+    _fields_ = [("write", WritePtrType)]
+
+class FuseBridge(object):
+    def __init__(self):
+        self.bridge_lib = tools.compile_library('bridge.c')
+        self.bridge = ct.cdll.LoadLibrary(self.bridge_lib)
+        self.callbacks = Callbacks.in_dll(self.bridge, 'python_callbacks')
+        self.bridge.debug_write(b"bumpers")
 
 def main():
-    errnos = find_errnos()
-    bridge = cdll.LoadLibrary(compile_library())
-    shutil.rmtree(os.path.dirname(bridge._name))
+    fuse = FuseBridge()
+    print("yelp")
 
 if __name__ == "__main__":
     main()

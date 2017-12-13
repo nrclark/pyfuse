@@ -173,3 +173,13 @@ int bridge_main(int argc, char *argv[])
 {
     return fuse_main(argc, argv, &bridge_oper, NULL);
 }
+
+/*--------------------------------------------------------------------*/
+
+int debug_write(char *string)
+{
+    int result = strnlen(string, 256);
+    printf("debug: [%s]\n", string);
+    return result;
+}
+
