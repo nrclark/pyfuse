@@ -56,9 +56,27 @@ class FuseBridge(object):
         self.callbacks = Callbacks.in_dll(self.bridge, 'python_callbacks')
         self.bridge.debug_write(b"bumpers")
 
+def load_string_ptr(address, data=b"", terminate=False):
+    # Copies a Python string (or bytes object) into a (char *) address.
+    # Optionally terminates the string with a NUL character.
+
+    if isinstance(data, str):
+        data = data.encode()
+
+    size = len(data) + int(terminate)
+    string = (ct.c_char * size).from_address(address)
+
+    if terminate:
+        string.raw = data + b"\x00"
+    else:
+        string.raw = data
+
 def main():
     fuse = FuseBridge()
-    print("yelp")
+
+    string_ptr = fuse.bridge.zalloc(64)
+    load_string_ptr(string_ptr, "hello, my dudes")
+    fuse.bridge.bridge_main(3, string_ptr)
 
 if __name__ == "__main__":
     main()
