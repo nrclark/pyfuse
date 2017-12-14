@@ -20,6 +20,11 @@ void *zalloc(size_t size)
     return calloc(1, size);
 }
 
+void zfree(void *ptr)
+{
+    free(ptr);
+}
+
 /*----------------------------------------------------------------------------*/
 
 static void load_file_info(const struct fuse_file_info *in,
@@ -89,7 +94,7 @@ static int bridge_readdir(const char *path, void *buf,
         return -EPERM;
     }
 
-    retval = python_callbacks.readdir(path, &entries, zalloc);
+    retval = python_callbacks.readdir(path, &entries);
 
     if (entries == NULL) {
         return -ENOENT;

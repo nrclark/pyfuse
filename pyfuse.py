@@ -28,8 +28,7 @@ class FileAttributes(ct.Structure):
 OpenPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.POINTER(FileInfo))
 AllocPtrType = ct.CFUNCTYPE(ct.c_void_p, ct.c_size_t)
 ReadDirPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p,
-                              ct.POINTER(ct.POINTER(ct.c_char_p)),
-                              AllocPtrType)
+                              ct.POINTER(ct.POINTER(ct.c_char_p)))
 
 GetAttrPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.POINTER(FileAttributes))
 

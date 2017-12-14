@@ -36,13 +36,9 @@ typedef int (*python_open_ptr)(const char *path, struct file_info *info);
  * 
  * The 'entries' record should be pointed to a 2-D array (created
  * by Python). The Python function that supplies this should use
- * the provided allocator to allocate all memory. The memory will
- * be freed at the end of the C routine. */
+ * bridge.c's zalloc() function to allocate all memory. */
 
-typedef void * (*alloc_ptr)(size_t size);
-
-typedef int (*python_readdir_ptr)(const char *path, char ***entries,
-                                  alloc_ptr allocator);
+typedef int (*python_readdir_ptr)(const char *path, char ***entries);
 
 /* Returns values of the form 0 (success), -ENOENT, -EACCES, etc. 
  * 
@@ -88,6 +84,9 @@ struct callbacks {
 
 extern struct callbacks python_callbacks;
 int bridge_main(int argc, char *argv[]);
+
+void *zalloc(size_t size);
+void zfree(void *ptr);
 
 /*--------------------------------------------------------------------*/
 
