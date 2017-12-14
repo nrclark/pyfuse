@@ -56,27 +56,52 @@ class FuseBridge(object):
         self.callbacks = Callbacks.in_dll(self.bridge, 'python_callbacks')
         self.bridge.debug_write(b"bumpers")
 
-def load_string_ptr(address, data=b"", terminate=False):
-    # Copies a Python string (or bytes object) into a (char *) address.
-    # Optionally terminates the string with a NUL character.
+    @staticmethod
+    def load_string_ptr(address, data=b"", terminate=False):
+        # Copies a Python string (or bytes object) into a (char *) address.
+        # Optionally terminates the string with a NUL character.
 
-    if isinstance(data, str):
-        data = data.encode()
+        if isinstance(data, str):
+            data = data.encode()
 
-    size = len(data) + int(terminate)
-    string = (ct.c_char * size).from_address(address)
+        size = len(data) + int(terminate)
+        string = (ct.c_char * size).from_address(address)
 
-    if terminate:
-        string.raw = data + b"\x00"
-    else:
-        string.raw = data
+        if terminate:
+            string.raw = data + b"\x00"
+        else:
+            string.raw = data
+
+    def make_string(self, data=b"", terminate=False):
+        # Uses the bridge's allocator to create a new (char *) buffer.
+        # Loads the string with a fixed input.
+
+        address = self.bridge.zalloc(len(data) + int(terminate))
+        self.load_string_ptr(address, data)
+        return address
+
+    def make_string_array(self, strings=(), string_term=True,
+                          array_term=True):
+        # Uses the bridge's allocator to create an array of C strings.
+        # Initializes the strings from a set of inputs.
+
+        length = len(strings) + int(array_term)
+
+        address = self.bridge.zalloc(ct.sizeof(ct.c_char_p) * length)
+        array = (ct.c_char_p * length).from_address(address)
+
+        for k,string in enumerate(strings):
+            array[k] = self.make_string(string, string_term)
+
+        return array
 
 def main():
     fuse = FuseBridge()
 
-    string_ptr = fuse.bridge.zalloc(64)
-    load_string_ptr(string_ptr, "hello, my dudes")
-    fuse.bridge.bridge_main(3, string_ptr)
+    args = ["hello", "my dudes", "it is thursday!"]
+    argc = len(args)
+    argv = fuse.make_string_array(args)
+    fuse.bridge.bridge_main(argc, argv)
 
 if __name__ == "__main__":
     main()

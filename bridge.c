@@ -171,7 +171,16 @@ static struct fuse_operations bridge_oper = {
 
 int bridge_main(int argc, char *argv[])
 {
-    return fuse_main(argc, argv, &bridge_oper, NULL);
+    printf("main man, dawg\n");
+
+    for (uint8_t x = 0; x < argc; x++)
+    {
+        printf("Arg %u: [%s]\n", x, argv[x]);
+    }
+
+    printf("--exiting main--\n");
+    return 2;
+    //return fuse_main(argc, argv, &bridge_oper, NULL);
 }
 
 /*--------------------------------------------------------------------*/
