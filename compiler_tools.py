@@ -50,11 +50,10 @@ def compile_library(files=(), libname="temp"):
     else:
         cflags = ["-O2"]
 
-    cflags += ["-D_FILE_OFFSET_BITS=64", "-fPIC", "-shared", "-lfuse"]
+    cflags += ["-D_FILE_OFFSET_BITS=64", "-fPIC", "-shared"]
     cflags += ["-Wall", "-Wextra", "-pedantic"]
 
-    command = cc_cmd + cflags + list(files) + ["-o", outfile]
-
+    command = cc_cmd + cflags + list(files) + ["-lfuse", "-o", outfile]
     try:
         result = sp.call(command)
     except FileNotFoundError:
