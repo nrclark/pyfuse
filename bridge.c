@@ -70,7 +70,7 @@ static int bridge_open(const char *path, struct fuse_file_info *fi)
     int retval;
     struct file_info info = {0};
 
-    if(python_callbacks.open == NULL) {
+    if (python_callbacks.open == NULL) {
         return -EPERM;
     }
 
@@ -100,7 +100,7 @@ static int bridge_readdir(const char *path, void *buf,
         return -ENOENT;
     }
 
-    for(uint32_t x = 0; entries[x] != NULL; x++) {
+    for (uint32_t x = 0; entries[x] != NULL; x++) {
         if (filler(buf, entries[x], NULL, 0) != 0) {
             retval = -EIO;
             break;
@@ -116,18 +116,19 @@ static int bridge_readdir(const char *path, void *buf,
 static int bridge_getattr(const char *path, struct stat *stbuf)
 {
     int retval;
-    struct file_attributes attributes;
+    struct file_attributes attributes = {0};
 
     if (python_callbacks.getattr == NULL) {
         return -EPERM;
     }
 
-    memset(stbuf, 0, sizeof(struct stat));
-    stbuf->st_nlink = 1;
-
     load_attributes(stbuf, &attributes);
     retval = python_callbacks.getattr(path, &attributes);
-    unload_attributes(&attributes, stbuf);
+
+    if (retval != -ENOENT) {
+        stbuf->st_nlink = 1;
+        unload_attributes(&attributes, stbuf);
+    }
 
     return retval;
 }
@@ -138,7 +139,7 @@ static int bridge_read(const char *path, char *buf, size_t size,
     int retval;
     struct file_info info = {0};
 
-    if(python_callbacks.read == NULL) {
+    if (python_callbacks.read == NULL) {
         return -EPERM;
     }
 
@@ -155,7 +156,7 @@ static int bridge_write(const char *path, const char *buf, size_t size,
     int retval;
     struct file_info info = {0};
 
-    if(python_callbacks.write == NULL) {
+    if (python_callbacks.write == NULL) {
         return -EPERM;
     }
 
@@ -176,15 +177,12 @@ static struct fuse_operations bridge_oper = {
 
 int bridge_main(int argc, char *argv[])
 {
-    printf("main man, dawg\n");
-
-    for (uint8_t x = 0; x < argc; x++)
-    {
-        printf("Arg %u: [%s]\n", x, argv[x]);
+    int result = fuse_main(argc, argv, &bridge_oper, NULL);
+    for (int x = 0; x < argc; x++) {
+        zfree(argv[x]);
     }
 
-    int result = fuse_main(argc, argv, &bridge_oper, NULL);
-    printf("--exiting main--\n");
+    zfree(argv);
     return result;
 }
 
@@ -192,7 +190,7 @@ int bridge_main(int argc, char *argv[])
 
 int debug_write(char *string)
 {
-    int result = strnlen(string, 256);
+    int result = strnlen(string, 1024);
     printf("debug: [%s]\n", string);
     return result;
 }

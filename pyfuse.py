@@ -32,7 +32,7 @@ ReadDirPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p,
 
 GetAttrPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.POINTER(FileAttributes))
 
-ReadPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_char_p, ct.c_uint64,
+ReadPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_void_p, ct.c_uint64,
                            ct.c_uint64, ct.POINTER(FileInfo))
 
 WritePtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_char_p, ct.c_uint64,
@@ -94,10 +94,13 @@ class FuseBridge(object):
         return array
 
     def main(self, argv):
+        argv = list(argv)
+        argv = [argv[0], "-s"] + argv[1:]
         argc = len(argv)
         argv = self.make_string_array(argv)
-        #XXX: Free argv afterwards
-        return self.extern.bridge_main(argc, argv)
+
+        result = self.extern.bridge_main(argc, argv)
+        return result
 
 def main():
     fuse = FuseBridge()
