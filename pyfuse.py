@@ -42,18 +42,17 @@ MainPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_int, ct.POINTER(ct.c_char_p))
 DebugType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p)
 
 class Callbacks(ct.Structure):
-    _fields_ = [("open", OpenPtrType)]
-    _fields_ = [("readdir", ReadDirPtrType)]
-    _fields_ = [("getattr", GetAttrPtrType)]
-    _fields_ = [("read", ReadPtrType)]
-    _fields_ = [("write", WritePtrType)]
+    _fields_ = [("open", OpenPtrType),
+                ("readdir", ReadDirPtrType),
+                ("getattr", GetAttrPtrType),
+                ("read", ReadPtrType),
+                ("write", WritePtrType)]
 
 class FuseBridge(object):
     def __init__(self):
         self.bridge_lib = tools.compile_library('bridge.c')
-        self.bridge = ct.cdll.LoadLibrary(self.bridge_lib)
-        self.callbacks = Callbacks.in_dll(self.bridge, 'python_callbacks')
-        self.bridge.debug_write(b"bumpers")
+        self.extern = ct.cdll.LoadLibrary(self.bridge_lib)
+        self.callbacks = Callbacks.in_dll(self.extern, 'python_callbacks')
 
     @staticmethod
     def load_string_ptr(address, data=b"", terminate=False):
@@ -75,7 +74,7 @@ class FuseBridge(object):
         # Uses the bridge's allocator to create a new (char *) buffer.
         # Loads the string with a fixed input.
 
-        address = self.bridge.zalloc(len(data) + int(terminate))
+        address = self.extern.zalloc(len(data) + int(terminate))
         self.load_string_ptr(address, data)
         return address
 
@@ -86,7 +85,7 @@ class FuseBridge(object):
 
         length = len(strings) + int(array_term)
 
-        address = self.bridge.zalloc(ct.sizeof(ct.c_char_p) * length)
+        address = self.extern.zalloc(ct.sizeof(ct.c_char_p) * length)
         array = (ct.c_char_p * length).from_address(address)
 
         for k,string in enumerate(strings):
@@ -94,13 +93,17 @@ class FuseBridge(object):
 
         return array
 
+    def main(self, argv):
+        argc = len(argv)
+        argv = self.make_string_array(argv)
+        #XXX: Free argv afterwards
+        return self.extern.bridge_main(argc, argv)
+
 def main():
     fuse = FuseBridge()
 
     args = ["hello", "my dudes", "it is thursday!"]
-    argc = len(args)
-    argv = fuse.make_string_array(args)
-    fuse.bridge.bridge_main(argc, argv)
+    fuse.main(args)
 
 if __name__ == "__main__":
     main()

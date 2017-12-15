@@ -121,7 +121,7 @@ static int bridge_getattr(const char *path, struct stat *stbuf)
     if (python_callbacks.getattr == NULL) {
         return -EPERM;
     }
-    
+
     memset(stbuf, 0, sizeof(struct stat));
     stbuf->st_nlink = 1;
 
@@ -183,9 +183,9 @@ int bridge_main(int argc, char *argv[])
         printf("Arg %u: [%s]\n", x, argv[x]);
     }
 
+    int result = fuse_main(argc, argv, &bridge_oper, NULL);
     printf("--exiting main--\n");
-    return 2;
-    //return fuse_main(argc, argv, &bridge_oper, NULL);
+    return result;
 }
 
 /*--------------------------------------------------------------------*/

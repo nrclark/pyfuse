@@ -1,108 +1,101 @@
 #!/usr/bin/env python3
 
 import sys
-import bridge
-import ctypes
-from bridge import FuseBridge, Errno, Fcntl, Stat
-from bridge import create_char_array, load_char_ptr
+import os
+import ctypes as ct
+import compiler_tools as tools
+import pyfuse
 
-hello_str = "Hello World!\n"
-hello_path = "/hello"
+class HelloFs(object):
+    def __init__(self):
+        self.hello_str = "Hello World!\n"
+        self.hello_path = "/hello"
+        self.bridge = pyfuse.FuseBridge()
 
-def hello_open(path, info):
-    assert isinstance(info, bridge.FileInfo)
-    assert isinstance(path, str)
+    def open(self, path, info):
+        assert isinstance(path, str)
+        assert isinstance(info, pyfuse.FileInfo)
 
-    if path != hello_path:
-        return -Errno.ENOENT
+        if path != hello_path:
+            return -Errno.ENOENT
 
-    if (info.flags & 0x03) != Flags.O_RDONLY:
-        return -Errno.EACCES
+        if (info.flags & 0x03) != Flags.O_RDONLY:
+            return -Errno.EACCES
 
-    return 0
-
-
-def hello_readdir(path, target, allocator):
-    assert isinstance(info, bridge.FileInfo)
-    assert isinstance(target, bridge.char_triple_ptr)
-    assert isinstance(allocator, bridge.AllocPtrType)
-
-    results = [".", "..", hello_path[1:], "moto"]
-    target[0] = create_char_array(results, target, allocator)
-    return 0
-
-
-def hello_getattr(path, attributes):
-    assert isinstance(path, str)
-    assert isinstance(attributes, bridge.FileAttributes)
-
-    attributes.uid = os.getuid()
-    attributes.gid = os.getgid()
-    attributes.size = 42
-
-    if path == "/":
-        attributes.mode = Stat.S_IFDIR | 755
-    elif path == hello_path:
-        attributes.mode = Stat.S_IFREG | 444
-    elif path == "/moto":
-        attributes.mode = Stat.S_IFDIR | 755
-    elif path == "/moto/hello":
-        attributes.mode = Stat.S_IFREG | 444
-    else:
-        return -Errno.ENOENT
-
-    return 0
-
-
-def hello_read(path, target, size, offset, info):
-    assert isinstance(info, bridge.FileInfo)
-    assert isinstance(target, bridge.char_ptr)
-    assert isinstance(allocator, bridge.AllocPtrType)
-
-    length = len(hello_str)
-
-    if path != hello_path:
-        return -Errno.ENOENT
-
-    if offset >= length:
         return 0
 
-    size = min(size, length - offset)
-    load_char_ptr(hello_str[offset:offset + size], target)
+    def readdir(self, path, target):
+        assert isinstance(path, str)
+        assert isinstance(target, ct.POINTER(ct.POINTER(ct.c_char_p)))
 
-    return size
+        results = [".", "..", self.hello_path[1:], "moto"]
+        target[0] = self.bridge.make_string_array(results)
+        return 0
 
+    def getattr(self, path, attributes):
+        assert isinstance(path, bytes)
+        assert isinstance(attributes, ct.POINTER(pyfuse.FileAttributes))
+        path = path.decode()
+        attributes.uid = os.getuid()
+        attributes.gid = os.getgid()
+        attributes.size = 42
 
-def hello_write(path, data, size, offset, info):
-    return size
+        if path == "/":
+            attributes.mode = tools.STAT_CONSTANTS["S_IFDIR"] | 755
+        elif path == self.hello_path:
+            attributes.mode = tools.STAT_CONSTANTS["S_IFREG"] | 444
+        elif path == "/moto":
+            attributes.mode = tools.STAT_CONSTANTS["S_IFDIR"] | 755
+        elif path == "/moto/hello":
+            attributes.mode = tools.STAT_CONSTANTS["S_IFREG"] | 444
+        else:
+            return -tools.ERRNO_CONSTANTS["ENOENT"]
+        return 0
 
+    def read(self, path, target, size, offset, info):
+        assert isinstance(path, str)
+        assert isinstance(target, ct.POINTER(ct.c_char))
+        assert isinstance(size, int)
+        assert isinstance(offset, int)
+        assert isinstance(info, bridge.FileInfo)
 
-def make_argv(args):
-    result = (ctypes.c_char_p * len(args))()
-    result[:] = args
-    return result
+        length = len(self.hello_str)
 
+        if path != self.hello_path:
+            return -tools.ERRNO_CONSTANTS["ENOENT"]
 
-def hello_main(argv):
-    assert isinstance(argv, (list, tuple))
+        if offset >= length:
+            return 0
 
-    fuse = FuseBridge()
-    fuse.callbacks.open = fuse.types.OpenPtrType(hello_open)
-    fuse.callbacks.readdir = fuse.types.ReadDirPtrType(hello_readdir)
-    fuse.callbacks.getattr = fuse.types.GetAttrPtrType(hello_getattr)
-    fuse.callbacks.read = fuse.types.ReadPtrType(hello_read)
-    fuse.callbacks.write = fuse.types.WritePtrType(hello_write)
+        size = min(size, length - offset)
+        self.bridge.load_string_ptr(self.hello_str[offset:offset + size], target)
 
-    argc = len(argv)
-    argv_pointer = create_char_array(argv)
+        return size
 
-    argv = make_argv([b"hello", b"my", b"dogs"])
-    argv = create_char_array([b"hello", b"my", b"dogs"], fuse.dll.zalloc)
-    return fuse.dll.bridge_main(3, argv)
+    def write(self, path, data, size, offset, info):
+        assert isinstance(path, str)
+        assert isinstance(data, str)
+        assert isinstance(size, int)
+        assert isinstance(offset, int)
+        assert isinstance(info, bridge.FileInfo)
 
+        print("Wrote [%s] to file [%s]\n", data, path)
+        return size
+
+    def main(self, argv=()):
+        assert isinstance(argv, (list, tuple))
+
+        self.bridge.callbacks.open = pyfuse.OpenPtrType(self.open)
+        self.bridge.callbacks.readdir = pyfuse.ReadDirPtrType(self.readdir)
+        self.bridge.callbacks.getattr = pyfuse.GetAttrPtrType(self.getattr)
+        self.bridge.callbacks.read = pyfuse.ReadPtrType(self.read)
+        self.bridge.callbacks.write = pyfuse.WritePtrType(self.write)
+
+        return self.bridge.main(argv)
 
 def main():
-    sys.exit(hello_main(sys.argv))
+    fs = HelloFs()
+    sys.exit(fs.main(sys.argv))
 
 if __name__ == "__main__":
     main()
