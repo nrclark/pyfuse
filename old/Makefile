@@ -4,7 +4,7 @@ BIN := hellofs
 MOUNT := yeek
 
 $(BIN): $(SRC)
-	gcc -D_FILE_OFFSET_BITS=64 -l fuse $< -o $@
+	gcc -D_FILE_OFFSET_BITS=64 $< -l fuse -o $@
 
 mount: $(BIN)
 	mkdir -p $(MOUNT)
