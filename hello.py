@@ -13,19 +13,22 @@ class HelloFs(object):
         self.bridge = pyfuse.FuseBridge()
 
     def open(self, path, info):
-        assert isinstance(path, str)
-        assert isinstance(info, pyfuse.FileInfo)
+        assert isinstance(path, bytes)
+        assert isinstance(info, ct.POINTER(pyfuse.FileInfo))
 
-        if path != hello_path:
-            return -Errno.ENOENT
+        path = path.decode()
 
-        if (info.flags & 0x03) != Flags.O_RDONLY:
-            return -Errno.EACCES
+        if path != self.hello_path:
+            return -tools.ERRNO_CONSTANTS["ENOENT"]
+
+        if (info.contents.flags & 0x03) != tools.FCNTL_CONSTANTS["O_RDONLY"]:
+            print("This filesystem is read-only")
+            return -tools.ERRNO_CONSTANTS["EACCES"]
 
         return 0
 
     def readdir(self, path, target):
-        assert isinstance(path, str)
+        assert isinstance(path, bytes)
         assert isinstance(target, ct.POINTER(ct.POINTER(ct.c_char_p)))
 
         results = [".", "..", self.hello_path[1:], "moto"]
@@ -35,51 +38,53 @@ class HelloFs(object):
     def getattr(self, path, attributes):
         assert isinstance(path, bytes)
         assert isinstance(attributes, ct.POINTER(pyfuse.FileAttributes))
-        path = path.decode()
-        attributes.uid = os.getuid()
-        attributes.gid = os.getgid()
-        attributes.size = 42
 
+        path = path.decode()
+        attributes.contents.uid = os.getuid()
+        attributes.contents.gid = os.getgid()
+        attributes.contents.size = 42
         if path == "/":
-            attributes.mode = tools.STAT_CONSTANTS["S_IFDIR"] | 755
+            attributes.contents.mode = tools.STAT_CONSTANTS["S_IFDIR"] | 0o755
         elif path == self.hello_path:
-            attributes.mode = tools.STAT_CONSTANTS["S_IFREG"] | 444
+            attributes.contents.mode = tools.STAT_CONSTANTS["S_IFREG"] | 0o666
         elif path == "/moto":
-            attributes.mode = tools.STAT_CONSTANTS["S_IFDIR"] | 755
+            attributes.contents.mode = tools.STAT_CONSTANTS["S_IFDIR"] | 0o755
         elif path == "/moto/hello":
-            attributes.mode = tools.STAT_CONSTANTS["S_IFREG"] | 444
+            attributes.contents.mode = tools.STAT_CONSTANTS["S_IFREG"] | 0o444
         else:
             return -tools.ERRNO_CONSTANTS["ENOENT"]
         return 0
 
     def read(self, path, target, size, offset, info):
-        assert isinstance(path, str)
-        assert isinstance(target, ct.POINTER(ct.c_char))
+        assert isinstance(path, bytes)
+        assert isinstance(target, int)
         assert isinstance(size, int)
         assert isinstance(offset, int)
-        assert isinstance(info, bridge.FileInfo)
+        assert isinstance(info, ct.POINTER(pyfuse.FileInfo))
 
-        length = len(self.hello_str)
+        path = path.decode()
 
         if path != self.hello_path:
             return -tools.ERRNO_CONSTANTS["ENOENT"]
+
+        length = len(self.hello_str)
 
         if offset >= length:
             return 0
 
         size = min(size, length - offset)
-        self.bridge.load_string_ptr(self.hello_str[offset:offset + size], target)
+        self.bridge.load_string_ptr(target, self.hello_str[offset:offset + size])
 
         return size
 
     def write(self, path, data, size, offset, info):
-        assert isinstance(path, str)
-        assert isinstance(data, str)
+        assert isinstance(path, bytes)
+        assert isinstance(data, bytes)
         assert isinstance(size, int)
         assert isinstance(offset, int)
-        assert isinstance(info, bridge.FileInfo)
+        assert isinstance(info, ct.POINTER(pyfuse.FileInfo))
 
-        print("Wrote [%s] to file [%s]\n", data, path)
+        print("Wrote [%s] to file [%s]\n" % (data, path))
         return size
 
     def main(self, argv=()):
