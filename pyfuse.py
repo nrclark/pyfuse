@@ -13,11 +13,13 @@ over time. """
 import time
 import multiprocessing
 import signal
+import sys
 
 import ctypes as ct
 import compiler_tools as tools
 
 #------------------------------------------------------------------------------#
+
 
 class FileInfo(ct.Structure):
     # pylint: disable=too-few-public-methods
@@ -181,13 +183,138 @@ class FuseBridge(object):
         return self.result
 
 
-def main():
-    """ Test routine. Shouldn't do anything interesting, broken at the
-    current time. """
-    fuse = FuseBridge()
+class BasicFs(object):
+    """ Basic FUSE filesystem class. Provides a full set of wrappers
+    around everything ctypes-specific, which simplifies the end-user's
+    design significantly. """
 
-    args = ["hello", "my dudes", "it is thursday!"]
-    fuse.main(args)
+    def __init__(self):
+        self.bridge = FuseBridge()
+        self.bridge.callbacks.open = OpenPtrType(self._open)
+        self.bridge.callbacks.readdir = ReadDirPtrType(self._readdir)
+        self.bridge.callbacks.getattr = GetAttrPtrType(self._getattr)
+        self.bridge.callbacks.read = ReadPtrType(self._read)
+        self.bridge.callbacks.write = WritePtrType(self._write)
+
+    def _open(self, path, info_ptr):
+        """ Wraps user-provided open() """
+        return self.open(path.decode(), info_ptr.contents)
+
+    def _readdir(self, path, target):
+        """ Wraps user-provided readdir() """
+
+        result = self.readdir(path.decode())
+
+        if isinstance(result, (tuple, list)):
+            target[0] = self.bridge.make_string_array(result[1])
+            return result[0]
+        elif isinstance(result, int):
+            return result
+
+        target[0] = self.bridge.make_string_array(result)
+        return 0
+
+    def _getattr(self, path, attributes_ptr):
+        """ Wraps user-provided getattr() """
+
+        result = self.getattr(path.decode())
+
+        if isinstance(result, (tuple, list)):
+            retval, attributes = result
+        elif isinstance(result, int):
+            return result
+        else:
+            retval, attributes = 0, result
+
+        #pylint: disable=protected-access
+        for field in attributes._fields_:
+            val = getattr(attributes, field[0])
+            setattr(attributes_ptr.contents, field[0], val)
+
+        return retval
+
+    def _read(self, path, target, size, offset, info_ptr):
+        #pylint: disable=too-many-arguments
+        """ Wraps user-provided read() """
+
+        result = self.read(path.decode(), size, offset, info_ptr.contents)
+
+        if isinstance(result, (tuple, list)):
+            self.bridge.load_string_ptr(target, result[1])
+            return result[0]
+        elif isinstance(result, int):
+            return result
+
+        self.bridge.load_string_ptr(target, result)
+        return 0
+
+    def _write(self, path, data, size, offset, info_ptr):
+        #pylint: disable=too-many-arguments
+        """ Wraps user-provided write() """
+
+        return self.write(path.decode(), data, size, offset, info_ptr.contents)
+
+    def main(self, argv=()):
+        """ Launches FUSE filesystem. Returns when the filesystem is dismounted
+        or FUSE is otherwise terminated. """
+
+        assert isinstance(argv, (list, tuple))
+        return self.bridge.main(argv)
+
+    def open(self, path, info):
+        # pylint: disable=unused-argument, no-self-use
+        """ Opens a file. Should return 0 on success, and something else
+        otherwise. """
+
+        sys.stderr.write("'Open' not implemented in this filesystem.\n")
+        return -1
+
+    def readdir(self, path):
+        # pylint: disable=unused-argument, no-self-use
+        """ Reads the contents of a directory. Should return a tuple
+        of (retval, contents), where 'contents' is a list or tuple of
+        entries in the directory. """
+
+        sys.stderr.write("'Readdir' not implemented in this filesystem.\n")
+        return -1, []
+
+    def getattr(self, path):
+        # pylint: disable=unused-argument, no-self-use
+        """ Gets the attributes of a path. Should return a tuple of
+        (retval, attributes), where 'attributes' is a FileAttributes()
+        instance. """
+
+        sys.stderr.write("'Getattr' not implemented in this filesystem.\n")
+        return -1, FileAttributes()
+
+    def read(self, path, size, offset, info):
+        # pylint: disable=unused-argument, no-self-use
+        """ Reads some data from a file. Should return a tuple of
+        (retval, data), where 'data' is a string/bytes instance. Retval
+        should be the length of the returned string, 0 if at EOF, or -1
+        in the event of an error. """
+
+        sys.stderr.write("'Read' not implemented in this filesystem.\n")
+        return -1, ""
+
+    def write(self, path, data, size, offset, info):
+        # pylint: disable=unused-argument, no-self-use, too-many-arguments
+        """ Writes some data to a file. Should return the number of bytes
+        written (generally retval should equal size), or -1 in the event
+        of an error.
+        (retval, data), where 'data' is a string/bytes instance, and retval
+        is the length of the string (or -1 in the event of an error). """
+
+        sys.stderr.write("'Write' not implemented in this filesystem.\n")
+        return -1
+
+
+def main():
+    """ Launches dummy filesystem. This filesystem won't do anything
+    except for complain at you. """
+
+    dummy_filesystem = BasicFs()
+    dummy_filesystem.main(sys.argv)
 
 
 if __name__ == "__main__":
