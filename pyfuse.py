@@ -7,9 +7,12 @@ import tempfile
 import re
 import sys
 import os
+import time
 
 import ctypes as ct
 import compiler_tools as tools
+import multiprocessing
+import signal
 
 #----------------------------------------------------------------------#
 
@@ -48,11 +51,21 @@ class Callbacks(ct.Structure):
                 ("read", ReadPtrType),
                 ("write", WritePtrType)]
 
+def register_process_killer(process, signum):
+    original_handler = signal.getsignal(signum)
+
+    def killer(num, frame):
+        process.terminate()
+        original_handler(num, frame)
+
+    signal.signal(signum, killer)
+
 class FuseBridge(object):
     def __init__(self):
         self.bridge_lib = tools.compile_library('bridge.c')
         self.extern = ct.cdll.LoadLibrary(self.bridge_lib)
         self.callbacks = Callbacks.in_dll(self.extern, 'python_callbacks')
+        self.result = None
 
     @staticmethod
     def load_string_ptr(address, data=b"", terminate=False):
@@ -93,14 +106,27 @@ class FuseBridge(object):
 
         return array
 
-    def main(self, argv):
+    def _main(self, argv):
         argv = list(argv)
         argv = [argv[0], "-s"] + argv[1:]
         argc = len(argv)
         argv = self.make_string_array(argv)
 
-        result = self.extern.bridge_main(argc, argv)
-        return result
+        self.result = self.extern.bridge_main(argc, argv)
+        return self.result
+
+    def main(self, argv):
+        self.process = multiprocessing.Process(target=self._main, args=(argv,))
+        self.process.start()
+        register_process_killer(self.process, signal.SIGINT)
+        register_process_killer(self.process, signal.SIGQUIT)
+        register_process_killer(self.process, signal.SIGTERM)
+
+        while self.process.is_alive():
+            time.sleep(0.5)
+
+        return self.result
+
 
 def main():
     fuse = FuseBridge()
