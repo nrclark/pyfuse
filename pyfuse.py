@@ -14,6 +14,7 @@ import time
 import multiprocessing
 import signal
 import sys
+import os
 
 import ctypes as ct
 import compiler_tools as tools
@@ -97,7 +98,8 @@ class FuseBridge(object):
     should be passed down to fuse_main. """
 
     def __init__(self):
-        self.bridge_lib = tools.compile_library('bridge.c')
+        srcfile = os.path.join(os.path.dirname(__file__), "bridge.c")
+        self.bridge_lib = tools.compile_library(srcfile)
         self.extern = ct.cdll.LoadLibrary(self.bridge_lib)
         self.callbacks = Callbacks.in_dll(self.extern, 'python_callbacks')
         self.result = None
