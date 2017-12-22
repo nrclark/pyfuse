@@ -51,6 +51,7 @@ ReadDirPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p,
                               ct.POINTER(ct.POINTER(ct.c_char_p)))
 
 GetAttrPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.POINTER(FileAttributes))
+AccessPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_int)
 
 ReadPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_void_p, ct.c_uint64,
                            ct.c_uint64, ct.POINTER(FileInfo))
@@ -70,6 +71,7 @@ class Callbacks(ct.Structure):
     _fields_ = [("open", OpenPtrType),
                 ("readdir", ReadDirPtrType),
                 ("getattr", GetAttrPtrType),
+                ("access", AccessPtrType),
                 ("read", ReadPtrType),
                 ("write", WritePtrType)]
 
@@ -203,6 +205,7 @@ class BasicFs(object):
         self.bridge.callbacks.open = OpenPtrType(self._open)
         self.bridge.callbacks.readdir = ReadDirPtrType(self._readdir)
         self.bridge.callbacks.getattr = GetAttrPtrType(self._getattr)
+        self.bridge.callbacks.access = AccessPtrType(self._access)
         self.bridge.callbacks.read = ReadPtrType(self._read)
         self.bridge.callbacks.write = WritePtrType(self._write)
 
@@ -242,6 +245,10 @@ class BasicFs(object):
             setattr(attributes_ptr.contents, field[0], val)
 
         return retval
+
+    def _access(self, path, mask):
+        """ Wraps user-provided access() """
+        return self.access(path.decode(), mask)
 
     def _read(self, path, target, size, offset, info_ptr):
         #pylint: disable=too-many-arguments
@@ -296,6 +303,15 @@ class BasicFs(object):
 
         sys.stderr.write("'Getattr' not implemented in this filesystem.\n")
         return -1, FileAttributes()
+
+    def access(self, path, mask):
+        # pylint: disable=unused-argument, no-self-use
+        """ Returns 0 if a path can be accessed with the provided mask,
+        -ENOENT if the path is nonexistent, or -EACCES if the path exists
+        but can't be accessed with the target mask. """
+
+        sys.stderr.write("'Access' not implemented in this filesystem.\n")
+        return -1
 
     def read(self, path, size, offset, info):
         # pylint: disable=unused-argument, no-self-use

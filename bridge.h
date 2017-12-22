@@ -40,6 +40,11 @@ typedef int (*python_open_ptr)(const char *path, struct file_info *info);
 
 typedef int (*python_readdir_ptr)(const char *path, char ***entries);
 
+/* Returns values of the form 0 (success), -ENOENT (no file), or -EACCES
+ * (invalid permission mask for file). */
+
+typedef int (*python_access_ptr)(const char *path, uint32_t mask);
+
 /* Returns values of the form 0 (success), -ENOENT, -EACCES, etc. 
  * 
  * The 'attributes' struct will arrive pre-loaded with whatever
@@ -76,6 +81,7 @@ struct callbacks {
     python_open_ptr open;
     python_readdir_ptr readdir;
     python_getattr_ptr getattr;
+    python_access_ptr access;
     python_read_ptr read;
     python_write_ptr write;
 };

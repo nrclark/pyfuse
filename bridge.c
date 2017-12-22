@@ -133,6 +133,15 @@ static int bridge_getattr(const char *path, struct stat *stbuf)
     return retval;
 }
 
+static int bridge_access(const char* path, int mask)
+{
+    if (python_callbacks.access == NULL) {
+        return -EPERM;
+    }
+
+    return python_callbacks.access(path, mask);
+}
+
 static int bridge_read(const char *path, char *buf, size_t size,
                        off_t offset, struct fuse_file_info *fi)
 {
@@ -172,7 +181,8 @@ static struct fuse_operations bridge_oper = {
     .readdir = bridge_readdir,
     .open = bridge_open,
     .read = bridge_read,
-    .write = bridge_write
+    .write = bridge_write,
+    .access = bridge_access
 };
 
 int bridge_main(int argc, char *argv[])
