@@ -90,6 +90,14 @@ def register_process_killer(process, signum):
 
     signal.signal(signum, killer)
 
+def profiler(target):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = target(*args, **kwargs)
+        print("%s ran in: %.4f sec" % (target.__name__, time.time() - start))
+        return result
+
+    return wrapper
 
 class FuseBridge(object):
     """ Main bridge object for creating and connecting custom FUSE designs.
