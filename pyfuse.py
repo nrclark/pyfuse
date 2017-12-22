@@ -15,6 +15,7 @@ import multiprocessing
 import signal
 import sys
 import os
+import shutil
 
 import ctypes as ct
 import compiler_tools as tools
@@ -78,22 +79,24 @@ class Callbacks(ct.Structure):
                 ("write", WritePtrType),
                 ("truncate", TruncatePtrType)]
 
-
-def register_process_killer(process, signum):
-    """ Registers a running multiprocess.Process() instance with the main
-    process's signal handlers. This ensures that interrupts/terminate requests
-    will also shut down the fuse event loop. """
+def register_signal_callback(callback, signum):
+    """ Registers a callback with the main process's signal handlers. This
+    can be used to do any last-minute clean-up before handling a SIGINT or
+    SIGQUIT. """
 
     original_handler = signal.getsignal(signum)
 
-    def killer(num, frame):
-        """ Signal-handler wrapper. Kills the process passed to parent, and
-        then launches the parent's signal handler. """
+    def handler(num, frame):
+        """ Signal-handler wrapper. Runs the callback and then launches
+        the parent's signal handler. """
+        try:
+            callback()
+        except Exception as e:
+            sys.stderr.write(str(e))
 
-        process.terminate()
         original_handler(num, frame)
 
-    signal.signal(signum, killer)
+    signal.signal(signum, handler)
 
 def profiler(target):
     def wrapper(*args, **kwargs):
@@ -196,9 +199,14 @@ class FuseBridge(object):
 
         self.process = multiprocessing.Process(target=self._main, args=(argv,))
         self.process.start()
-        register_process_killer(self.process, signal.SIGINT)
-        register_process_killer(self.process, signal.SIGQUIT)
-        register_process_killer(self.process, signal.SIGTERM)
+
+        def cleanup():
+            self.process.terminate()
+            shutil.rmtree(os.path.dirname(self.bridge_lib), ignore_errors=True)
+
+        register_signal_callback(cleanup, signal.SIGINT)
+        register_signal_callback(cleanup, signal.SIGQUIT)
+        register_signal_callback(cleanup, signal.SIGTERM)
 
         while self.process.is_alive():
             time.sleep(0.5)
