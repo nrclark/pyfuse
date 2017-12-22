@@ -159,6 +159,15 @@ static int bridge_read(const char *path, char *buf, size_t size,
     return retval;
 }
 
+static int bridge_truncate(const char* path, off_t size)
+{
+    if (python_callbacks.truncate == NULL) {
+        return -EPERM;
+    }
+
+    return python_callbacks.truncate(path, size);
+}
+
 static int bridge_write(const char *path, const char *buf, size_t size,
                         off_t offset, struct fuse_file_info *fi)
 {
@@ -179,6 +188,7 @@ static int bridge_write(const char *path, const char *buf, size_t size,
 static struct fuse_operations bridge_oper = {
     .getattr = bridge_getattr,
     .readdir = bridge_readdir,
+    .truncate = bridge_truncate,
     .open = bridge_open,
     .read = bridge_read,
     .write = bridge_write,

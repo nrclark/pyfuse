@@ -75,6 +75,10 @@ typedef int (*python_write_ptr)(const char *path, const char *inbuf,
                                 uint64_t size, uint64_t offset,
                                 struct file_info *info);
 
+/* Returns values of the form 0 (success), -ENOENT, -EACCES, etc. */
+
+typedef int (*python_truncate_ptr)(const char *path, uint64_t size);
+
 /*--------------------------------------------------------------------*/
 
 struct callbacks {
@@ -84,6 +88,7 @@ struct callbacks {
     python_access_ptr access;
     python_read_ptr read;
     python_write_ptr write;
+    python_truncate_ptr truncate;
 };
 
 /*--------------------------------------------------------------------*/

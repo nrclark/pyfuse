@@ -56,8 +56,10 @@ AccessPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_int)
 ReadPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_void_p, ct.c_uint64,
                            ct.c_uint64, ct.POINTER(FileInfo))
 
-WritePtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_char_p, ct.c_uint64,
+WritePtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_void_p, ct.c_uint64,
                             ct.c_uint64, ct.POINTER(FileInfo))
+
+TruncatePtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_uint64)
 
 MainPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_int, ct.POINTER(ct.c_char_p))
 # pylint: enable=invalid-name
@@ -73,7 +75,8 @@ class Callbacks(ct.Structure):
                 ("getattr", GetAttrPtrType),
                 ("access", AccessPtrType),
                 ("read", ReadPtrType),
-                ("write", WritePtrType)]
+                ("write", WritePtrType),
+                ("truncate", TruncatePtrType)]
 
 
 def register_process_killer(process, signum):
@@ -114,6 +117,14 @@ class FuseBridge(object):
         self.callbacks = Callbacks.in_dll(self.extern, 'python_callbacks')
         self.result = None
         self.process = None
+
+    @staticmethod
+    def unload_bytes(address, length):
+        """ Copies a fixed amount of bytes from a (char *) buffer to a new
+        Python bytes() instance and returns the result. """
+
+        char_buffer = (ct.c_char * length).from_address(address)
+        return char_buffer.raw
 
     @staticmethod
     def load_string_ptr(address, data=b"", terminate=False):
@@ -208,6 +219,7 @@ class BasicFs(object):
         self.bridge.callbacks.access = AccessPtrType(self._access)
         self.bridge.callbacks.read = ReadPtrType(self._read)
         self.bridge.callbacks.write = WritePtrType(self._write)
+        self.bridge.callbacks.truncate = TruncatePtrType(self._truncate)
 
     def _open(self, path, info_ptr):
         """ Wraps user-provided open() """
@@ -269,7 +281,14 @@ class BasicFs(object):
         #pylint: disable=too-many-arguments
         """ Wraps user-provided write() """
 
-        return self.write(path.decode(), data, size, offset, info_ptr.contents)
+        write_data = self.bridge.unload_bytes(data, size)
+        return self.write(path.decode(), write_data, offset, info_ptr.contents)
+
+    def _truncate(self, path, size):
+        """ Wraps user-provided truncate() """
+
+        return self.truncate(path.decode(), size)
+
 
     def main(self, argv=()):
         """ Launches FUSE filesystem. Returns when the filesystem is dismounted
@@ -323,17 +342,22 @@ class BasicFs(object):
         sys.stderr.write("'Read' not implemented in this filesystem.\n")
         return -1, ""
 
-    def write(self, path, data, size, offset, info):
+    def write(self, path, data, offset, info):
         # pylint: disable=unused-argument, no-self-use, too-many-arguments
         """ Writes some data to a file. Should return the number of bytes
-        written (generally retval should equal size), or -1 in the event
-        of an error.
-        (retval, data), where 'data' is a string/bytes instance, and retval
-        is the length of the string (or -1 in the event of an error). """
+        written (generally retval should equal len(data)), or -1 in the event
+        of an error. 'Offset' is the target offset into the file. """
 
         sys.stderr.write("'Write' not implemented in this filesystem.\n")
         return -1
 
+    def truncate(self, path, size):
+        # pylint: disable=unused-argument, no-self-use, too-many-arguments
+        """ Truncates a file to a given size. Should return 0 on success
+        or a negative number in the event of an error. """
+
+        sys.stderr.write("'Truncate' not implemented in this filesystem.\n")
+        return -1
 
 def main():
     """ Launches dummy filesystem. This filesystem won't do anything
