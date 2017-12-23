@@ -186,7 +186,7 @@ class FuseBridge(object):
         generally shouldn't be called directly. """
 
         argv = list(argv)
-        argv = [argv[0], "-s"] + argv[1:]
+        argv = [argv[0], "-s", "-o", "auto_unmount"] + argv[1:]
         argc = len(argv)
         argv = self.make_string_array(argv)
 
