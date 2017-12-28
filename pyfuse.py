@@ -186,10 +186,14 @@ class FuseBridge(object):
         generally shouldn't be called directly. """
 
         argv = list(argv)
-        argv = [argv[0], "-s", "-o", "auto_unmount"] + argv[1:]
+        fuse_opts = ["allow_other", "intr", "auto_unmount"]
+        fuse_args = [x for pair in [("-o", x) for x in fuse_opts] for x in pair]
+
+        argv = [argv[0], "-s"] + fuse_args + argv[1:]
         argc = len(argv)
         argv = self.make_string_array(argv)
 
+        sys.tracebacklimit = 0
         self.result = self.extern.bridge_main(argc, argv)
         return self.result
 
@@ -201,8 +205,10 @@ class FuseBridge(object):
         self.process.start()
 
         def cleanup():
+            sys.stderr.write("Terminating.\n")
             self.process.terminate()
             shutil.rmtree(os.path.dirname(self.bridge_lib), ignore_errors=True)
+            sys.exit(1)
 
         register_signal_callback(cleanup, signal.SIGINT)
         register_signal_callback(cleanup, signal.SIGQUIT)
