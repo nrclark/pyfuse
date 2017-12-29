@@ -30,8 +30,7 @@ class FileInfo(ct.Structure):
 
     _fields_ = [("handle", ct.c_uint64),
                 ("flags", ct.c_uint32),
-                ("direct_io", ct.c_bool),
-                ("nonseekable", ct.c_bool)]
+                ("direct_io", ct.c_bool)]
 
 
 class FileAttributes(ct.Structure):
@@ -117,6 +116,13 @@ class FuseBridge(object):
         srcfile = os.path.join(os.path.dirname(__file__), "bridge.c")
         self.bridge_lib = tools.compile_library(srcfile)
         self.extern = ct.cdll.LoadLibrary(self.bridge_lib)
+
+        self.extern.zalloc.restype = ct.c_void_p
+        self.extern.zalloc.argtypes = [ct.c_size_t]
+        self.extern.zfree.argtypes = [ct.c_void_p]
+        self.extern.bridge_main.restype = ct.c_int
+        self.extern.bridge_main.argtypes = [ct.c_int, ct.c_void_p]
+
         self.callbacks = Callbacks.in_dll(self.extern, 'python_callbacks')
         self.result = None
         self.process = None
@@ -186,7 +192,11 @@ class FuseBridge(object):
         generally shouldn't be called directly. """
 
         argv = list(argv)
-        fuse_opts = ["allow_other", "intr", "auto_unmount"]
+        fuse_opts = ["allow_other", "intr"]
+
+        if sys.platform != "darwin":
+            fuse_opts += ["auto_unmount"]
+
         fuse_args = [x for pair in [("-o", x) for x in fuse_opts] for x in pair]
 
         argv = [argv[0], "-s"] + fuse_args + argv[1:]

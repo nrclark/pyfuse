@@ -33,7 +33,6 @@ static void load_file_info(const struct fuse_file_info *in,
     out->handle = in->fh;
     out->flags = in->flags;
     out->direct_io = in->direct_io;
-    out->nonseekable = in->nonseekable;
 }
 
 static void unload_file_info(const struct file_info *in,
@@ -42,7 +41,6 @@ static void unload_file_info(const struct file_info *in,
     out->fh = in->handle;
     out->flags = in->flags;
     out->direct_io = in->direct_io;
-    out->nonseekable = in->nonseekable;
 }
 
 static void load_attributes(const struct stat *in,

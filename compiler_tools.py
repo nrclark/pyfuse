@@ -48,12 +48,18 @@ def compile_library(files=(), libname="temp"):
     if "CFLAGS" in os.environ:
         cflags = shlex.split(os.environ["CFLAGS"])
     else:
-        cflags = ["-O2"]
+        cflags = ["-O2", "-Wall", "-Wextra", "-Wno-missing-field-initializers",
+                  "-pedantic"]
 
     cflags += ["-D_FILE_OFFSET_BITS=64", "-fPIC", "-shared"]
-    cflags += ["-Wall", "-Wextra", "-pedantic"]
 
-    command = cc_cmd + cflags + list(files) + ["-lfuse", "-o", outfile]
+    if sys.platform == "darwin":
+        cflags += ["-D_DARWIN_USE_64_BIT_INODE"]
+        fuselib = "osxfuse"
+    else:
+        fuselib = "fuse"
+
+    command = cc_cmd + cflags + list(files) + ["-l" + fuselib, "-o", outfile]
     try:
         result = sp.call(command)
     except FileNotFoundError:
