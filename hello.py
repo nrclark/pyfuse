@@ -65,6 +65,8 @@ class HelloFs(pyfuse.BasicFs):
         print("Wrote [%s] to file [%s]\n" % (data, path))
         return size
 
+    def access(self, path, mask):
+        return 0
 
 def main():
     """ Main routine for launching filesystem. """
