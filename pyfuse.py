@@ -199,6 +199,9 @@ class FuseBridge(object):
         if sys.platform != "darwin":
             fuse_opts += ["auto_unmount"]
 
+        if sys.platform == "darwin":
+            fuse_opts += ["volname="+os.path.basename(self.mount_point)]
+
         fuse_args = [x for pair in [("-o", x) for x in fuse_opts] for x in pair]
 
         argv = [argv[0], "-s"] + fuse_args + argv[1:]
