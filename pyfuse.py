@@ -16,6 +16,7 @@ import signal
 import sys
 import os
 import shutil
+import subprocess as sp
 
 import ctypes as ct
 import compiler_tools as tools
@@ -126,6 +127,7 @@ class FuseBridge(object):
         self.callbacks = Callbacks.in_dll(self.extern, 'python_callbacks')
         self.result = None
         self.process = None
+        self.mount_point = ''
 
     @staticmethod
     def unload_bytes(address, length):
@@ -211,11 +213,33 @@ class FuseBridge(object):
         """ Main routine for launching FUSE bridge after the user has finished
         connecting callbacks. """
 
+        skip = False
+
+        for arg in argv[1:]:
+            if skip:
+                skip = False
+                continue
+
+            if arg == '-o':
+                skip = True
+                continue
+
+            if arg[0:1] != '-':
+                self.mount_point = os.path.abspath(arg)
+                break
+
         self.process = multiprocessing.Process(target=self._main, args=(argv,))
         self.process.start()
 
         def cleanup():
             sys.stderr.write("Terminating.\n")
+
+            if (sys.platform == "darwin") and (self.mount_point != ""):
+                try:
+                    sp.call(["diskutil", "unmount", "force", self.mount_point])
+                except Exception as err:
+                    sys.stderr.write(str(err) + "\n")
+
             self.process.terminate()
             shutil.rmtree(os.path.dirname(self.bridge_lib), ignore_errors=True)
             sys.exit(1)
