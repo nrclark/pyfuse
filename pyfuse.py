@@ -16,6 +16,7 @@ import signal
 import sys
 import os
 import shutil
+import subprocess as sp
 
 import ctypes as ct
 import compiler_tools as tools
@@ -30,8 +31,7 @@ class FileInfo(ct.Structure):
 
     _fields_ = [("handle", ct.c_uint64),
                 ("flags", ct.c_uint32),
-                ("direct_io", ct.c_bool),
-                ("nonseekable", ct.c_bool)]
+                ("direct_io", ct.c_bool)]
 
 
 class FileAttributes(ct.Structure):
@@ -117,9 +117,17 @@ class FuseBridge(object):
         srcfile = os.path.join(os.path.dirname(__file__), "bridge.c")
         self.bridge_lib = tools.compile_library(srcfile)
         self.extern = ct.cdll.LoadLibrary(self.bridge_lib)
+
+        self.extern.zalloc.restype = ct.c_void_p
+        self.extern.zalloc.argtypes = [ct.c_size_t]
+        self.extern.zfree.argtypes = [ct.c_void_p]
+        self.extern.bridge_main.restype = ct.c_int
+        self.extern.bridge_main.argtypes = [ct.c_int, ct.c_void_p]
+
         self.callbacks = Callbacks.in_dll(self.extern, 'python_callbacks')
         self.result = None
         self.process = None
+        self.mount_point = ''
 
     @staticmethod
     def unload_bytes(address, length):
@@ -186,7 +194,14 @@ class FuseBridge(object):
         generally shouldn't be called directly. """
 
         argv = list(argv)
-        fuse_opts = ["allow_other", "intr", "auto_unmount"]
+        fuse_opts = ["allow_other", "intr"]
+
+        if sys.platform != "darwin":
+            fuse_opts += ["auto_unmount"]
+
+        if sys.platform == "darwin":
+            fuse_opts += ["volname="+os.path.basename(self.mount_point)]
+
         fuse_args = [x for pair in [("-o", x) for x in fuse_opts] for x in pair]
 
         argv = [argv[0], "-s"] + fuse_args + argv[1:]
@@ -201,11 +216,33 @@ class FuseBridge(object):
         """ Main routine for launching FUSE bridge after the user has finished
         connecting callbacks. """
 
+        skip = False
+
+        for arg in argv[1:]:
+            if skip:
+                skip = False
+                continue
+
+            if arg == '-o':
+                skip = True
+                continue
+
+            if arg[0:1] != '-':
+                self.mount_point = os.path.abspath(arg)
+                break
+
         self.process = multiprocessing.Process(target=self._main, args=(argv,))
         self.process.start()
 
         def cleanup():
             sys.stderr.write("Terminating.\n")
+
+            if (sys.platform == "darwin") and (self.mount_point != ""):
+                try:
+                    sp.call(["diskutil", "unmount", "force", self.mount_point])
+                except Exception as err:
+                    sys.stderr.write(str(err) + "\n")
+
             self.process.terminate()
             shutil.rmtree(os.path.dirname(self.bridge_lib), ignore_errors=True)
             sys.exit(1)

@@ -11,7 +11,6 @@ struct file_info {
     uint64_t handle;
     uint32_t flags;
     bool direct_io;
-    bool nonseekable;
 };
 
 struct file_attributes {
