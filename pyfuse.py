@@ -19,7 +19,7 @@ import shutil
 import subprocess as sp
 
 import ctypes as ct
-import compiler_tools as tools
+import pyfuse.compiler_tools as tools
 
 #------------------------------------------------------------------------------#
 
