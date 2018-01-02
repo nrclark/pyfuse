@@ -17,9 +17,10 @@ import sys
 import os
 import shutil
 import subprocess as sp
-
 import ctypes as ct
-import pyfuse.compiler_tools as tools
+
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+import compiler_tools as tools
 
 #------------------------------------------------------------------------------#
 
