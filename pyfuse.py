@@ -20,13 +20,13 @@ import subprocess as sp
 import ctypes as ct
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-import compiler_tools as tools
+import compiler_tools as tools  #pylint: disable=wrong-import-position
 
 #------------------------------------------------------------------------------#
 
 
 class FileInfo(ct.Structure):
-    # pylint: disable=too-few-public-methods
+    #pylint: disable=too-few-public-methods
     """ Equivalent structure to file_info from bridge.h. Used as a reduced-
     complexity version of fuse_file_info. """
 
@@ -36,7 +36,7 @@ class FileInfo(ct.Structure):
 
 
 class FileAttributes(ct.Structure):
-    # pylint: disable=too-few-public-methods
+    #pylint: disable=too-few-public-methods
     """ Equivalent structure to file_info from bridge.h. Used as a reduced-
     complexity version of the stat structure. """
 
@@ -46,7 +46,7 @@ class FileAttributes(ct.Structure):
                 ("gid", ct.c_uint32)]
 
 
-# pylint: disable=invalid-name
+#pylint: disable=invalid-name
 OpenPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.POINTER(FileInfo))
 AllocPtrType = ct.CFUNCTYPE(ct.c_void_p, ct.c_size_t)
 ReadDirPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p,
@@ -64,11 +64,11 @@ WritePtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_void_p, ct.c_uint64,
 TruncatePtrType = ct.CFUNCTYPE(ct.c_int, ct.c_char_p, ct.c_uint64)
 
 MainPtrType = ct.CFUNCTYPE(ct.c_int, ct.c_int, ct.POINTER(ct.c_char_p))
-# pylint: enable=invalid-name
+#pylint: enable=invalid-name
 
 
 class Callbacks(ct.Structure):
-    # pylint: disable=too-few-public-methods
+    #pylint: disable=too-few-public-methods
     """ Equivalent structure to callbacks from bridge.h. Used to provide the
     callback interface from FUSE back into Python. """
 
@@ -79,6 +79,7 @@ class Callbacks(ct.Structure):
                 ("read", ReadPtrType),
                 ("write", WritePtrType),
                 ("truncate", TruncatePtrType)]
+
 
 def register_signal_callback(callback, signum):
     """ Registers a callback with the main process's signal handlers. This
@@ -91,22 +92,29 @@ def register_signal_callback(callback, signum):
         """ Signal-handler wrapper. Runs the callback and then launches
         the parent's signal handler. """
         try:
+            #pylint: disable=broad-except
             callback()
-        except Exception as e:
-            sys.stderr.write(str(e))
+        except Exception as err:
+            sys.stderr.write(str(err))
 
         original_handler(num, frame)
 
     signal.signal(signum, handler)
 
+
 def profiler(target):
+    """ Decorator for use in profiling code. Runs the decorated function
+    and prints the run-time. """
+
     def wrapper(*args, **kwargs):
+        #pylint: disable=missing-docstring
         start = time.time()
         result = target(*args, **kwargs)
         print("%s ran in: %.4f sec" % (target.__name__, time.time() - start))
         return result
 
     return wrapper
+
 
 class FuseBridge(object):
     """ Main bridge object for creating and connecting custom FUSE designs.
@@ -201,7 +209,7 @@ class FuseBridge(object):
             fuse_opts += ["auto_unmount"]
 
         if sys.platform == "darwin":
-            fuse_opts += ["volname="+os.path.basename(self.mount_point)]
+            fuse_opts += ["volname=" + os.path.basename(self.mount_point)]
 
         fuse_args = [x for pair in [("-o", x) for x in fuse_opts] for x in pair]
 
@@ -236,10 +244,15 @@ class FuseBridge(object):
         self.process.start()
 
         def cleanup():
+            """ Cleanup callback. Unmounts the FUSE filesystem (on MacOS),
+            terminates the FUSE subprocess, and deletes the temporary
+            helper library. """
+
             sys.stderr.write("Terminating.\n")
 
             if (sys.platform == "darwin") and (self.mount_point != ""):
                 try:
+                    #pylint: disable=broad-except
                     sp.call(["diskutil", "unmount", "force", self.mount_point])
                 except Exception as err:
                     sys.stderr.write(str(err) + "\n")
@@ -265,19 +278,19 @@ class BasicFs(object):
 
     def __init__(self):
         self.bridge = FuseBridge()
-        self.bridge.callbacks.open = OpenPtrType(self._open)
-        self.bridge.callbacks.readdir = ReadDirPtrType(self._readdir)
-        self.bridge.callbacks.getattr = GetAttrPtrType(self._getattr)
-        self.bridge.callbacks.access = AccessPtrType(self._access)
-        self.bridge.callbacks.read = ReadPtrType(self._read)
-        self.bridge.callbacks.write = WritePtrType(self._write)
-        self.bridge.callbacks.truncate = TruncatePtrType(self._truncate)
+        self.bridge.callbacks.open = OpenPtrType(self._fs_open)
+        self.bridge.callbacks.readdir = ReadDirPtrType(self._fs_readdir)
+        self.bridge.callbacks.getattr = GetAttrPtrType(self._fs_getattr)
+        self.bridge.callbacks.access = AccessPtrType(self._fs_access)
+        self.bridge.callbacks.read = ReadPtrType(self._fs_read)
+        self.bridge.callbacks.write = WritePtrType(self._fs_write)
+        self.bridge.callbacks.truncate = TruncatePtrType(self._fs_truncate)
 
-    def _open(self, path, info_ptr):
+    def _fs_open(self, path, info_ptr):
         """ Wraps user-provided open() """
         return self.open(path.decode(), info_ptr.contents)
 
-    def _readdir(self, path, target):
+    def _fs_readdir(self, path, target):
         """ Wraps user-provided readdir() """
 
         result = self.readdir(path.decode())
@@ -291,7 +304,7 @@ class BasicFs(object):
         target[0] = self.bridge.make_string_array(result)
         return 0
 
-    def _getattr(self, path, attributes_ptr):
+    def _fs_getattr(self, path, attributes_ptr):
         """ Wraps user-provided getattr() """
 
         result = self.getattr(path.decode())
@@ -310,11 +323,11 @@ class BasicFs(object):
 
         return retval
 
-    def _access(self, path, mask):
+    def _fs_access(self, path, mask):
         """ Wraps user-provided access() """
         return self.access(path.decode(), mask)
 
-    def _read(self, path, target, size, offset, info_ptr):
+    def _fs_read(self, path, target, size, offset, info_ptr):
         #pylint: disable=too-many-arguments
         """ Wraps user-provided read() """
 
@@ -329,18 +342,17 @@ class BasicFs(object):
         self.bridge.load_string_ptr(target, result)
         return 0
 
-    def _write(self, path, data, size, offset, info_ptr):
+    def _fs_write(self, path, data, size, offset, info_ptr):
         #pylint: disable=too-many-arguments
         """ Wraps user-provided write() """
 
         write_data = self.bridge.unload_bytes(data, size)
         return self.write(path.decode(), write_data, offset, info_ptr.contents)
 
-    def _truncate(self, path, size):
+    def _fs_truncate(self, path, size):
         """ Wraps user-provided truncate() """
 
         return self.truncate(path.decode(), size)
-
 
     def main(self, argv=()):
         """ Launches FUSE filesystem. Returns when the filesystem is dismounted
@@ -350,7 +362,7 @@ class BasicFs(object):
         return self.bridge.main(argv)
 
     def open(self, path, info):
-        # pylint: disable=unused-argument, no-self-use
+        #pylint: disable=unused-argument, no-self-use
         """ Opens a file. Should return 0 on success, and something else
         otherwise. """
 
@@ -358,7 +370,7 @@ class BasicFs(object):
         return -1
 
     def readdir(self, path):
-        # pylint: disable=unused-argument, no-self-use
+        #pylint: disable=unused-argument, no-self-use
         """ Reads the contents of a directory. Should return a tuple
         of (retval, contents), where 'contents' is a list or tuple of
         entries in the directory. """
@@ -367,7 +379,7 @@ class BasicFs(object):
         return -1, []
 
     def getattr(self, path):
-        # pylint: disable=unused-argument, no-self-use
+        #pylint: disable=unused-argument, no-self-use
         """ Gets the attributes of a path. Should return a tuple of
         (retval, attributes), where 'attributes' is a FileAttributes()
         instance. """
@@ -376,7 +388,7 @@ class BasicFs(object):
         return -1, FileAttributes()
 
     def access(self, path, mask):
-        # pylint: disable=unused-argument, no-self-use
+        #pylint: disable=unused-argument, no-self-use
         """ Returns 0 if a path can be accessed with the provided mask,
         -ENOENT if the path is nonexistent, or -EACCES if the path exists
         but can't be accessed with the target mask. """
@@ -385,7 +397,7 @@ class BasicFs(object):
         return -1
 
     def read(self, path, size, offset, info):
-        # pylint: disable=unused-argument, no-self-use
+        #pylint: disable=unused-argument, no-self-use
         """ Reads some data from a file. Should return a tuple of
         (retval, data), where 'data' is a string/bytes instance. Retval
         should be the length of the returned string, 0 if at EOF, or -1
@@ -395,7 +407,7 @@ class BasicFs(object):
         return -1, ""
 
     def write(self, path, data, offset, info):
-        # pylint: disable=unused-argument, no-self-use, too-many-arguments
+        #pylint: disable=unused-argument, no-self-use, too-many-arguments
         """ Writes some data to a file. Should return the number of bytes
         written (generally retval should equal len(data)), or -1 in the event
         of an error. 'Offset' is the target offset into the file. """
@@ -404,12 +416,13 @@ class BasicFs(object):
         return -1
 
     def truncate(self, path, size):
-        # pylint: disable=unused-argument, no-self-use, too-many-arguments
+        #pylint: disable=unused-argument, no-self-use, too-many-arguments
         """ Truncates a file to a given size. Should return 0 on success
         or a negative number in the event of an error. """
 
         sys.stderr.write("'Truncate' not implemented in this filesystem.\n")
         return -1
+
 
 def main():
     """ Launches dummy filesystem. This filesystem won't do anything
