@@ -203,12 +203,13 @@ class FuseBridge(object):
         generally shouldn't be called directly. """
 
         argv = list(argv)
-        fuse_opts = ["allow_other", "intr"]
+        fuse_opts = ["allow_other", "intr", "direct_io"]
 
         if sys.platform != "darwin":
             fuse_opts += ["auto_unmount"]
 
         if sys.platform == "darwin":
+            fuse_opts += ["nolocalcaches"]
             fuse_opts += ["volname=" + os.path.basename(self.mount_point)]
 
         fuse_args = [x for pair in [("-o", x) for x in fuse_opts] for x in pair]
