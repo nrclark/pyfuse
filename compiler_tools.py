@@ -56,6 +56,8 @@ def compile_library(files=(), libname="temp"):
     if sys.platform == "darwin":
         cflags += ["-D_DARWIN_USE_64_BIT_INODE"]
         fuselib = "osxfuse"
+        if os.path.exists("/usr/local/include/osxfuse/"):
+            cflags += ["-I/usr/local/include/osxfuse"]
     else:
         fuselib = "fuse"
 
