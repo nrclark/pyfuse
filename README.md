@@ -11,6 +11,10 @@ The basic idea is that Pyfuse hides most of the FUSE weirdness and ctypes
 weirdness, and allows you to get down to the business of implementing
 your filesystem.
 
+## License ##
+
+Pyfuse is licensed under GPLv2.
+
 ## Naming ##
 
 There's a name collision with the other Pyfuse module. I know.
